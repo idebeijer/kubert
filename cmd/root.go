@@ -4,6 +4,7 @@ import (
 	"log/slog"
 	"os"
 
+	"github.com/idebeijer/kubert/cmd/kubeconfig"
 	"github.com/idebeijer/kubert/internal/config"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
@@ -46,6 +47,7 @@ func (c *RootCmd) initFlags() {
 }
 
 func (c *RootCmd) addCommands() {
+	c.AddCommand(kubeconfig.NewCommand())
 }
 
 func (c *RootCmd) initConfig() {
