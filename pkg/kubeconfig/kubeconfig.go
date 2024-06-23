@@ -97,7 +97,13 @@ func filterFiles(files []string, excludePatterns []string) ([]string, error) {
 	}
 	for _, file := range files {
 		if !excludeMap[file] {
-			filteredFiles = append(filteredFiles, file)
+			info, err := os.Stat(file)
+			if err != nil {
+				return nil, err
+			}
+			if !info.IsDir() {
+				filteredFiles = append(filteredFiles, file)
+			}
 		}
 	}
 	return filteredFiles, nil
