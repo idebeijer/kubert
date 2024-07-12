@@ -40,26 +40,23 @@ func (c *RootCmd) Execute() {
 func (c *RootCmd) initFlags() {
 	cobra.OnInitialize(c.initConfig)
 
-	c.PersistentFlags().String("log-level", "info", "log level")
-	viper.BindPFlag("log-level", c.PersistentFlags().Lookup("log-level"))
+	c.PersistentFlags().Bool("debug", false, "debug mode")
+	_ = viper.BindPFlag("debug", c.PersistentFlags().Lookup("debug"))
 
 	c.PersistentFlags().StringVar(&c.cfgFile, "config", "", "config file (default is $HOME/.kubert.yaml)")
 }
 
 func (c *RootCmd) addCommands() {
 	c.AddCommand(kubeconfig.NewCommand())
+	c.AddCommand(NewContextCommand())
 }
 
 func (c *RootCmd) initConfig() {
 	var level slog.Level
-	logLevel := viper.GetString("log-level")
-	_ = level.UnmarshalText([]byte(logLevel))
-	logHandler := slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{
-		AddSource: true,
-		Level:     level,
-	})
-	logger := slog.New(logHandler)
-	slog.SetDefault(logger)
+	if viper.GetBool("debug") {
+		level = slog.LevelDebug
+	}
+	slog.SetLogLoggerLevel(level)
 
 	if c.cfgFile != "" {
 		// Use config file from the flag.
