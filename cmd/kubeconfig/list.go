@@ -4,7 +4,7 @@ import (
 	"fmt"
 
 	"github.com/idebeijer/kubert/internal/config"
-	"github.com/idebeijer/kubert/pkg/kubeconfig"
+	"github.com/idebeijer/kubert/internal/kubeconfig"
 	"github.com/spf13/cobra"
 )
 

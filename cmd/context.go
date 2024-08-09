@@ -10,8 +10,8 @@ import (
 	"strings"
 
 	"github.com/idebeijer/kubert/internal/config"
-	"github.com/idebeijer/kubert/pkg/fzf"
-	"github.com/idebeijer/kubert/pkg/kubeconfig"
+	"github.com/idebeijer/kubert/internal/fzf"
+	"github.com/idebeijer/kubert/internal/kubeconfig"
 	"github.com/spf13/cobra"
 )
 
@@ -19,8 +19,9 @@ func NewContextCommand() *cobra.Command {
 	cmd := &cobra.Command{}
 
 	cmd = &cobra.Command{
-		Use:   "context",
-		Short: "context command",
+		Use:     "ctx",
+		Short:   "context command",
+		Aliases: []string{"context"},
 		RunE: func(cmd *cobra.Command, args []string) error {
 			cfg := config.Cfg
 			fsProvider := kubeconfig.NewFileSystemProvider(cfg.KubeconfigPaths.Include, cfg.KubeconfigPaths.Exclude)
@@ -77,24 +78,13 @@ func selectContextName(args []string, contextNames []string) (string, error) {
 		printContextNames(contextNames)
 		return "", nil
 	}
-	return fzfSelect(contextNames)
+	return fzf.Select(contextNames)
 }
 
 func printContextNames(contextNames []string) {
 	for _, name := range contextNames {
 		fmt.Println(name)
 	}
-}
-
-func fzfSelect(contextNames []string) (string, error) {
-	contextKeysStr := strings.Join(contextNames, "\n")
-	fzfCmd := exec.Command("fzf", "--ansi")
-	fzfCmd.Stdin = strings.NewReader(contextKeysStr)
-	output, err := fzfCmd.Output()
-	if err != nil {
-		return "", err
-	}
-	return strings.TrimSpace(string(output)), nil
 }
 
 func findContextByName(contexts []kubeconfig.Context, name string) (kubeconfig.Context, bool) {

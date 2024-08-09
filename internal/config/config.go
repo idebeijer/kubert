@@ -15,15 +15,10 @@ type KubeconfigPaths struct {
 }
 
 type KubeconfigProvider struct {
-	Local       LocalKubeconfigProvider `mapstructure:"local"`
-	OnePassword OnePasswordProvider     `mapstructure:"onepassword"`
+	Local LocalKubeconfigProvider `mapstructure:"local"`
 }
 
 type LocalKubeconfigProvider struct {
-	Enabled bool `mapstructure:"enabled"`
-}
-
-type OnePasswordProvider struct {
 	Enabled bool `mapstructure:"enabled"`
 }
 
