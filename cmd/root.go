@@ -10,6 +10,14 @@ import (
 	"github.com/spf13/viper"
 )
 
+const (
+	// KubertShellActiveEnvVar is the environment variable that is set to indicate that Kubert is active.
+	KubertShellActiveEnvVar = "KUBERT_SHELL_ACTIVE"
+
+	// KubertShellKubeconfigEnvVar is the environment variable that is set to the path of the temporary kubeconfig file.
+	KubertShellKubeconfigEnvVar = "KUBERT_SHELL_KUBECONFIG"
+)
+
 type RootCmd struct {
 	*cobra.Command
 
@@ -49,6 +57,7 @@ func (c *RootCmd) initFlags() {
 func (c *RootCmd) addCommands() {
 	c.AddCommand(kubeconfig.NewCommand())
 	c.AddCommand(NewContextCommand())
+	c.AddCommand(NewNamespaceCommand())
 }
 
 func (c *RootCmd) initConfig() {

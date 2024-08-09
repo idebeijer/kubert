@@ -2,17 +2,17 @@ package cmd
 
 import (
 	"fmt"
-	"io"
 	"log/slog"
 	"os"
 	"os/exec"
 	"sort"
-	"strings"
 
 	"github.com/idebeijer/kubert/internal/config"
 	"github.com/idebeijer/kubert/internal/fzf"
 	"github.com/idebeijer/kubert/internal/kubeconfig"
 	"github.com/spf13/cobra"
+	"k8s.io/client-go/tools/clientcmd"
+	"k8s.io/client-go/tools/clientcmd/api"
 )
 
 func NewContextCommand() *cobra.Command {
@@ -20,7 +20,7 @@ func NewContextCommand() *cobra.Command {
 
 	cmd = &cobra.Command{
 		Use:     "ctx",
-		Short:   "context command",
+		Short:   "Context command",
 		Aliases: []string{"context"},
 		RunE: func(cmd *cobra.Command, args []string) error {
 			cfg := config.Cfg
@@ -41,19 +41,22 @@ func NewContextCommand() *cobra.Command {
 			if err != nil {
 				return err
 			}
+			if selectedContextName == "" {
+				return nil
+			}
 
 			selectedContext, found := findContextByName(contexts, selectedContextName)
 			if !found {
 				return fmt.Errorf("context %s not found", selectedContextName)
 			}
 
-			tempKubeconfig, cleanup, err := createTempKubeconfigFile(selectedContext.FilePath)
+			tempKubeconfig, cleanup, err := createTempKubeconfigFile(selectedContext.FilePath, selectedContextName)
 			if err != nil {
 				return err
 			}
 			defer cleanup()
 
-			slog.Debug("Found and copied the specified kubeconfig to a temp file", "tempKubeconfig", tempKubeconfig.Name())
+			slog.Debug("Created a new kubeconfig with the specified context", "tempKubeconfig", tempKubeconfig.Name())
 
 			return launchShellWithKubeconfig(tempKubeconfig.Name())
 		},
@@ -96,7 +99,33 @@ func findContextByName(contexts []kubeconfig.Context, name string) (kubeconfig.C
 	return kubeconfig.Context{}, false
 }
 
-func createTempKubeconfigFile(kubeconfigPath string) (*os.File, func(), error) {
+func createTempKubeconfigFile(kubeconfigPath, selectedContextName string) (*os.File, func(), error) {
+	// Load the original kubeconfig
+	cfg, err := clientcmd.LoadFromFile(kubeconfigPath)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	selectedContext := cfg.Contexts[selectedContextName]
+	if selectedContext == nil {
+		return nil, nil, fmt.Errorf("context %s not found in kubeconfig", selectedContextName)
+	}
+	selectedCluster := cfg.Clusters[selectedContext.Cluster]
+	if selectedCluster == nil {
+		return nil, nil, fmt.Errorf("cluster %s not found in kubeconfig", selectedContext.Cluster)
+	}
+	selectedAuthInfo := cfg.AuthInfos[selectedContext.AuthInfo]
+	if selectedAuthInfo == nil {
+		return nil, nil, fmt.Errorf("auth info %s not found in kubeconfig", selectedContext.AuthInfo)
+	}
+
+	// Build a new kubeconfig with only the selected context
+	newConfig := api.NewConfig()
+	newConfig.Contexts[selectedContextName] = selectedContext
+	newConfig.Clusters[selectedContext.Cluster] = selectedCluster
+	newConfig.AuthInfos[selectedContext.AuthInfo] = selectedAuthInfo
+	newConfig.CurrentContext = selectedContextName
+
 	tempKubeconfig, err := os.CreateTemp("", "kubert-*.yaml")
 	if err != nil {
 		return nil, nil, err
@@ -105,18 +134,13 @@ func createTempKubeconfigFile(kubeconfigPath string) (*os.File, func(), error) {
 	if err != nil {
 		return nil, nil, err
 	}
-	selectedKubeconfig, err := os.Open(strings.TrimSpace(kubeconfigPath))
-	if err != nil {
-		return nil, nil, err
-	}
-	_, err = io.Copy(tempKubeconfig, selectedKubeconfig)
-	if err != nil {
-		return nil, nil, err
+
+	if err := clientcmd.WriteToFile(*newConfig, tempKubeconfig.Name()); err != nil {
+		return nil, nil, fmt.Errorf("failed to write kubeconfig: %w", err)
 	}
 
 	cleanup := func() {
 		_ = tempKubeconfig.Close()
-		_ = selectedKubeconfig.Close()
 		_ = os.Remove(tempKubeconfig.Name())
 	}
 
@@ -127,6 +151,12 @@ func launchShellWithKubeconfig(kubeconfigPath string) error {
 	// Set the KUBECONFIG environment variable to the path of the temporary kubeconfig file
 	if err := os.Setenv("KUBECONFIG", kubeconfigPath); err != nil {
 		return fmt.Errorf("failed to set KUBECONFIG environment variable: %w", err)
+	}
+	if err := os.Setenv(KubertShellActiveEnvVar, "1"); err != nil {
+		return fmt.Errorf("failed to set KUBERT_SHELL environment variable: %w", err)
+	}
+	if err := os.Setenv(KubertShellKubeconfigEnvVar, kubeconfigPath); err != nil {
+		return fmt.Errorf("failed to set KUBERT_SHELL_KUBECONFIG environment variable: %w", err)
 	}
 
 	// Get the user's preferred shell from the SHELL environment variable
