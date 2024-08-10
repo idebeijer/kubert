@@ -20,9 +20,12 @@ func NewContextCommand() *cobra.Command {
 	cmd := &cobra.Command{}
 
 	cmd = &cobra.Command{
-		Use:     "ctx",
-		Short:   "Context command",
-		Aliases: []string{"context"},
+		Use:   "ctx",
+		Short: "Spawn a shell with the selected context",
+		Long: `Start a shell with the KUBECONFIG environment variable set to the selected context.
+Kubert will issue a temporary kubeconfig file with the selected context, so that multiple shells can be spawned with different contexts.`,
+		Aliases:           []string{"context"},
+		ValidArgsFunction: validContextArgsFunction,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			cfg := config.Cfg
 			fsProvider := kubeconfig.NewFileSystemProvider(cfg.KubeconfigPaths.Include, cfg.KubeconfigPaths.Exclude)
@@ -183,4 +186,21 @@ func launchShellWithKubeconfig(kubeconfigPath string) error {
 	}
 
 	return nil
+}
+
+func validContextArgsFunction(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
+	cfg := config.Cfg
+	fsProvider := kubeconfig.NewFileSystemProvider(cfg.KubeconfigPaths.Include, cfg.KubeconfigPaths.Exclude)
+	loader := kubeconfig.NewLoader(fsProvider)
+	contextLoader := kubeconfig.NewContextLoader(loader)
+
+	contexts, err := contextLoader.LoadContexts()
+	if err != nil {
+		return nil, cobra.ShellCompDirectiveError
+	}
+
+	contextNames := getContextNames(contexts)
+	sort.Strings(contextNames)
+
+	return contextNames, cobra.ShellCompDirectiveNoFileComp
 }
