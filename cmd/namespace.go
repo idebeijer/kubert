@@ -23,6 +23,7 @@ func NewNamespaceCommand() *cobra.Command {
 		PreRunE: func(cmd *cobra.Command, args []string) error {
 			return preflightCheck()
 		},
+		ValidArgsFunction: validArgsFunction,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			ctx := context.Background()
 
@@ -46,7 +47,7 @@ func NewNamespaceCommand() *cobra.Command {
 				return err
 			}
 
-			if err := switchNamespace(sm, namespace); err != nil {
+			if err := switchNamespace(sm, namespace, namespaces); err != nil {
 				return err
 			}
 
@@ -102,7 +103,18 @@ func printNamespaces(contextNames []string) {
 	}
 }
 
-func switchNamespace(sm *state.Manager, namespace string) error {
+func switchNamespace(sm *state.Manager, namespace string, namespaces []string) error {
+	namespaceExists := false
+	for _, ns := range namespaces {
+		if ns == namespace {
+			namespaceExists = true
+			break
+		}
+	}
+	if !namespaceExists {
+		return fmt.Errorf("namespace \"%s\" does not exist", namespace)
+	}
+
 	kubeconfigPath := os.Getenv("KUBECONFIG")
 	if kubeconfigPath == "" {
 		kubeconfigPath = clientcmd.RecommendedHomeFile
@@ -154,4 +166,20 @@ func preflightCheck() error {
 	}
 
 	return nil
+}
+
+func validArgsFunction(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
+	ctx := context.Background()
+
+	clientset, err := createKubernetesClient()
+	if err != nil {
+		return nil, cobra.ShellCompDirectiveError
+	}
+
+	namespaces, err := listNamespaces(ctx, clientset)
+	if err != nil {
+		return nil, cobra.ShellCompDirectiveError
+	}
+
+	return namespaces, cobra.ShellCompDirectiveNoFileComp
 }
