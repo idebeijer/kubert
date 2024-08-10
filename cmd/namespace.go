@@ -6,6 +6,7 @@ import (
 	"os"
 
 	"github.com/idebeijer/kubert/internal/fzf"
+	"github.com/idebeijer/kubert/internal/state"
 	"github.com/spf13/cobra"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
@@ -25,6 +26,11 @@ func NewNamespaceCommand() *cobra.Command {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			ctx := context.Background()
 
+			sm, err := state.NewManager()
+			if err != nil {
+				return err
+			}
+
 			clientset, err := createKubernetesClient()
 			if err != nil {
 				return err
@@ -40,7 +46,7 @@ func NewNamespaceCommand() *cobra.Command {
 				return err
 			}
 
-			if err := switchNamespace(namespace); err != nil {
+			if err := switchNamespace(sm, namespace); err != nil {
 				return err
 			}
 
@@ -96,7 +102,7 @@ func printNamespaces(contextNames []string) {
 	}
 }
 
-func switchNamespace(namespace string) error {
+func switchNamespace(sm *state.Manager, namespace string) error {
 	kubeconfigPath := os.Getenv("KUBECONFIG")
 	if kubeconfigPath == "" {
 		kubeconfigPath = clientcmd.RecommendedHomeFile
@@ -111,6 +117,10 @@ func switchNamespace(namespace string) error {
 
 	if err := clientcmd.WriteToFile(*config, kubeconfigPath); err != nil {
 		return fmt.Errorf("failed to write kubeconfig: %w", err)
+	}
+
+	if err := sm.SetLastNamespaceWithContextCreation(config.CurrentContext, namespace); err != nil {
+		return err
 	}
 
 	return nil
