@@ -18,12 +18,13 @@ func NewNamespaceCommand() *cobra.Command {
 
 	cmd = &cobra.Command{
 		Use:     "ns",
-		Short:   "Namespace command",
+		Short:   "Switch to a different namespace",
+		Long:    `Switch to a different namespace in the current Kubert shell. Other shells with the same context will not be affected.`,
 		Aliases: []string{"namespace"},
 		PreRunE: func(cmd *cobra.Command, args []string) error {
 			return preflightCheck()
 		},
-		ValidArgsFunction: validArgsFunction,
+		ValidArgsFunction: validNamespaceArgsFunction,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			ctx := context.Background()
 
@@ -168,7 +169,7 @@ func preflightCheck() error {
 	return nil
 }
 
-func validArgsFunction(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
+func validNamespaceArgsFunction(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
 	ctx := context.Background()
 
 	clientset, err := createKubernetesClient()
