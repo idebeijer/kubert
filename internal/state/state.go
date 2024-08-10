@@ -4,8 +4,10 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"sync"
 
 	"github.com/adrg/xdg"
+	"github.com/gofrs/flock"
 )
 
 const (
@@ -20,6 +22,8 @@ type State struct {
 type Manager struct {
 	filename string
 	state    State
+	fileLock *flock.Flock
+	mutex    sync.Mutex
 }
 
 func NewManager() (*Manager, error) {
@@ -28,21 +32,47 @@ func NewManager() (*Manager, error) {
 		return nil, err
 	}
 
+	fullPath := filepath.Join(dataDir, stateFile)
 	manager := &Manager{
-		filename: filepath.Join(dataDir, stateFile),
+		filename: fullPath,
 		state: State{
 			Contexts: make(map[string]ContextInfo),
 		},
+		fileLock: flock.New(fullPath + ".lock"),
 	}
 
-	if err := manager.Load(); err != nil && !os.IsNotExist(err) {
-		return nil, err
+	// Check if the state file exists
+	if _, err := os.Stat(fullPath); os.IsNotExist(err) {
+		// Create the state file with an initial empty state
+		if err := manager.Save(); err != nil {
+			return nil, err
+		}
+	} else {
+		if err := manager.Load(); err != nil {
+			return nil, err
+		}
 	}
 
 	return manager, nil
 }
 
+func (m *Manager) Lock() error {
+	m.mutex.Lock()
+	return m.fileLock.Lock()
+}
+
+func (m *Manager) Unlock() error {
+	err := m.fileLock.Unlock()
+	m.mutex.Unlock()
+	return err
+}
+
 func (m *Manager) Load() error {
+	if err := m.Lock(); err != nil {
+		return err
+	}
+	defer m.Unlock()
+
 	data, err := os.ReadFile(m.filename)
 	if err != nil {
 		return err
@@ -52,6 +82,11 @@ func (m *Manager) Load() error {
 }
 
 func (m *Manager) Save() error {
+	if err := m.Lock(); err != nil {
+		return err
+	}
+	defer m.Unlock()
+
 	data, err := json.MarshalIndent(m.state, "", "  ")
 	if err != nil {
 		return err

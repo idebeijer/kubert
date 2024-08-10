@@ -18,6 +18,9 @@ type ContextInfo struct {
 }
 
 func (m *Manager) ContextInfo(context string) (ContextInfo, bool) {
+	m.mutex.Lock()
+	defer m.mutex.Unlock()
+
 	info, exists := m.state.Contexts[context]
 	return info, exists
 }
@@ -43,6 +46,9 @@ func (m *Manager) SetLastNamespace(context, namespace string) error {
 }
 
 func (m *Manager) ListContexts() []string {
+	m.mutex.Lock()
+	defer m.mutex.Unlock()
+
 	contexts := make([]string, 0, len(m.state.Contexts))
 	for context := range m.state.Contexts {
 		contexts = append(contexts, context)
