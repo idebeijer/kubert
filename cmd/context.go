@@ -10,6 +10,7 @@ import (
 	"github.com/idebeijer/kubert/internal/config"
 	"github.com/idebeijer/kubert/internal/fzf"
 	"github.com/idebeijer/kubert/internal/kubeconfig"
+	"github.com/idebeijer/kubert/internal/state"
 	"github.com/spf13/cobra"
 	"k8s.io/client-go/tools/clientcmd"
 	"k8s.io/client-go/tools/clientcmd/api"
@@ -27,6 +28,7 @@ func NewContextCommand() *cobra.Command {
 			fsProvider := kubeconfig.NewFileSystemProvider(cfg.KubeconfigPaths.Include, cfg.KubeconfigPaths.Exclude)
 			loader := kubeconfig.NewLoader(fsProvider)
 			contextLoader := kubeconfig.NewContextLoader(loader)
+			sm, err := state.NewManager()
 
 			contexts, err := contextLoader.LoadContexts()
 			if err != nil {
@@ -50,7 +52,9 @@ func NewContextCommand() *cobra.Command {
 				return fmt.Errorf("context %s not found", selectedContextName)
 			}
 
-			tempKubeconfig, cleanup, err := createTempKubeconfigFile(selectedContext.FilePath, selectedContextName)
+			// Find the context in the state to get the last namespace used, so it can be set in the new kubeconfig
+			contextInState, _ := sm.ContextInfo(selectedContextName)
+			tempKubeconfig, cleanup, err := createTempKubeconfigFile(selectedContext.FilePath, selectedContextName, contextInState.LastNamespace)
 			if err != nil {
 				return err
 			}
@@ -99,7 +103,7 @@ func findContextByName(contexts []kubeconfig.Context, name string) (kubeconfig.C
 	return kubeconfig.Context{}, false
 }
 
-func createTempKubeconfigFile(kubeconfigPath, selectedContextName string) (*os.File, func(), error) {
+func createTempKubeconfigFile(kubeconfigPath, selectedContextName, namespace string) (*os.File, func(), error) {
 	// Load the original kubeconfig
 	cfg, err := clientcmd.LoadFromFile(kubeconfigPath)
 	if err != nil {
@@ -125,6 +129,9 @@ func createTempKubeconfigFile(kubeconfigPath, selectedContextName string) (*os.F
 	newConfig.Clusters[selectedContext.Cluster] = selectedCluster
 	newConfig.AuthInfos[selectedContext.AuthInfo] = selectedAuthInfo
 	newConfig.CurrentContext = selectedContextName
+	if namespace != "" {
+		newConfig.Contexts[selectedContextName].Namespace = namespace
+	}
 
 	tempKubeconfig, err := os.CreateTemp("", "kubert-*.yaml")
 	if err != nil {
