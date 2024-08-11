@@ -8,6 +8,7 @@ import (
 	"github.com/idebeijer/kubert/internal/config"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
+	_ "k8s.io/client-go/plugin/pkg/client/auth"
 )
 
 const (
@@ -62,10 +63,6 @@ func (c *RootCmd) addCommands() {
 
 func (c *RootCmd) initConfig() {
 	var level slog.Level
-	if viper.GetBool("debug") {
-		level = slog.LevelDebug
-	}
-	slog.SetLogLoggerLevel(level)
 
 	if c.cfgFile != "" {
 		// Use config file from the flag.
@@ -81,6 +78,7 @@ func (c *RootCmd) initConfig() {
 		viper.SetConfigName(".kubert.yaml")
 	}
 
+	viper.SetEnvPrefix("kubert")
 	viper.AutomaticEnv()
 
 	// If a config file is found, read it in.
@@ -89,4 +87,9 @@ func (c *RootCmd) initConfig() {
 	}
 	_ = viper.ReadInConfig()
 	_ = viper.Unmarshal(&config.Cfg)
+
+	if viper.GetBool("debug") {
+		level = slog.LevelDebug
+	}
+	slog.SetLogLoggerLevel(level)
 }
