@@ -1,0 +1,56 @@
+# yaml-language-server: $schema=https://goreleaser.com/static/schema.json
+# vim: set ts=2 sw=2 tw=0 fo=cnqoj
+
+version: 2
+
+before:
+  hooks:
+    - go mod tidy
+    - ./scripts/completions.sh
+
+builds:
+  - env:
+      - CGO_ENABLED=0
+    goos:
+      - linux
+      - windows
+      - darwin
+
+archives:
+  - files:
+      - completions/*
+
+brews:
+  - repository:
+      owner: idebeijer
+      name: homebrew-tap
+      token: "{{ .Env.HOMEBREW_TAP_GITHUB_TOKEN }}"
+    directory: Formula
+    homepage: "https://github.com/idebeijer/kubert"
+    dependencies:
+      - name: fzf
+        type: optional
+    install: |
+      bin.install "kubert"
+      zsh_completion.install "completions/kubert.zsh" => "_kubert"
+      bash_completion.install "completions/kubert.bash" => "kubert"
+      fish_completion.install "completions/kubert.fish"
+
+changelog:
+  sort: asc
+  groups:
+    - title: "Breaking changes"
+      regexp: '^.*?(feat|fix|build|ci|chore|refactor|perf|test|revert)(\([a-zA-Z0-9_\-]+\))?!:\s?.+$'
+      order: 0
+    - title: Features
+      regexp: '^.*?feat(\([a-zA-Z0-9_\-]+\))?(!)?:\s?.+$'
+      order: 1
+    - title: "Bug fixes"
+      regexp: '^.*?fix(\([a-zA-Z0-9_\-]+\))?(!)?:\s?.+$'
+      order: 2
+    - title: Others
+      order: 999
+  filters:
+    exclude:
+      - '^.*?(docs|test|style|build|ci)(\([a-zA-Z0-9_\-]+\))?!?:\s?.+$'
+      - 'initial commit'
