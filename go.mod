@@ -2,8 +2,6 @@ module github.com/idebeijer/kubert
 
 go 1.22.6
 
-toolchain go1.22.6
-
 require (
 	github.com/adrg/xdg v0.5.0
 	github.com/gofrs/flock v0.12.1
