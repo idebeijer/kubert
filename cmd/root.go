@@ -59,6 +59,7 @@ func (c *RootCmd) addCommands() {
 	c.AddCommand(kubeconfig.NewCommand())
 	c.AddCommand(NewContextCommand())
 	c.AddCommand(NewNamespaceCommand())
+	c.AddCommand(NewKubectlCommand())
 }
 
 func (c *RootCmd) initConfig() {
