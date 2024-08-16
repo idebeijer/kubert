@@ -10,6 +10,7 @@ import (
 	"github.com/idebeijer/kubert/internal/config"
 	"github.com/idebeijer/kubert/internal/fzf"
 	"github.com/idebeijer/kubert/internal/kubeconfig"
+	"github.com/idebeijer/kubert/internal/kubert"
 	"github.com/idebeijer/kubert/internal/state"
 	"github.com/spf13/cobra"
 	"k8s.io/client-go/tools/clientcmd"
@@ -162,10 +163,10 @@ func launchShellWithKubeconfig(kubeconfigPath string) error {
 	if err := os.Setenv("KUBECONFIG", kubeconfigPath); err != nil {
 		return fmt.Errorf("failed to set KUBECONFIG environment variable: %w", err)
 	}
-	if err := os.Setenv(KubertShellActiveEnvVar, "1"); err != nil {
+	if err := os.Setenv(kubert.ShellActiveEnvVar, "1"); err != nil {
 		return fmt.Errorf("failed to set KUBERT_SHELL environment variable: %w", err)
 	}
-	if err := os.Setenv(KubertShellKubeconfigEnvVar, kubeconfigPath); err != nil {
+	if err := os.Setenv(kubert.ShellKubeconfigEnvVar, kubeconfigPath); err != nil {
 		return fmt.Errorf("failed to set KUBERT_SHELL_KUBECONFIG environment variable: %w", err)
 	}
 

@@ -4,19 +4,12 @@ import (
 	"log/slog"
 	"os"
 
+	"github.com/idebeijer/kubert/cmd/contextlock"
 	"github.com/idebeijer/kubert/cmd/kubeconfig"
 	"github.com/idebeijer/kubert/internal/config"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 	_ "k8s.io/client-go/plugin/pkg/client/auth"
-)
-
-const (
-	// KubertShellActiveEnvVar is the environment variable that is set to indicate that Kubert is active.
-	KubertShellActiveEnvVar = "KUBERT_SHELL_ACTIVE"
-
-	// KubertShellKubeconfigEnvVar is the environment variable that is set to the path of the temporary kubeconfig file.
-	KubertShellKubeconfigEnvVar = "KUBERT_SHELL_KUBECONFIG"
 )
 
 type RootCmd struct {
@@ -57,6 +50,7 @@ func (c *RootCmd) initFlags() {
 
 func (c *RootCmd) addCommands() {
 	c.AddCommand(kubeconfig.NewCommand())
+	c.AddCommand(contextlock.NewCommand())
 	c.AddCommand(NewContextCommand())
 	c.AddCommand(NewNamespaceCommand())
 	c.AddCommand(NewKubectlCommand())

@@ -4,8 +4,13 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"regexp"
 	"strings"
 
+	"github.com/idebeijer/kubert/internal/config"
+	"github.com/idebeijer/kubert/internal/kubert"
+	"github.com/idebeijer/kubert/internal/state"
+	"github.com/idebeijer/kubert/internal/util"
 	"github.com/spf13/cobra"
 )
 
@@ -14,15 +19,48 @@ func NewKubectlCommand() *cobra.Command {
 
 	cmd = &cobra.Command{
 		Use:                "kubectl",
-		Short:              "Wrapper for kubectl, with some extra features",
-		Long:               `Wrapper for kubectl, with some extra features`,
+		Short:              "Wrapper for kubectl",
+		Long:               `Wrapper for kubectl, to support context locking.`,
 		DisableFlagParsing: true,
 		Aliases:            []string{"namespace"},
 		PreRunE: func(cmd *cobra.Command, args []string) error {
-			return kubectlPreflightCheck()
+			_, err := exec.LookPath("kubectl")
+			if err != nil {
+				return fmt.Errorf("kubectl not found in PATH")
+			}
+
+			return kubert.ShellPreFlightCheck()
 		},
+		SilenceUsage:      true,
 		ValidArgsFunction: validKubectlArgsFunction,
 		RunE: func(cmd *cobra.Command, args []string) error {
+			cfg := config.Cfg
+
+			sm, err := state.NewManager()
+			if err != nil {
+				return err
+			}
+
+			clientConfig, err := util.KubeClientConfig()
+			if err != nil {
+				return err
+			}
+
+			locked, err := isContextLocked(sm, clientConfig.CurrentContext, cfg)
+			if err != nil {
+				return err
+			}
+
+			if locked {
+				if isCommandBlocked(args, cfg.Contexts.BlockedKubectlCommands) {
+					fmt.Printf("Oops: you tried to run the kubectl command \"%s\" in the locked context \"%s\".\n\n"+
+						"The command has not been executed because the \"%s\" command is on the blocked list, and the current context is locked.\n"+
+						"Use 'kubert context-lock unlock' to unlock the current context.\n"+
+						"Exiting...\n", args[0], clientConfig.CurrentContext, args[0])
+					return nil
+				}
+			}
+
 			kubectlCmd := exec.Command("kubectl", args...)
 			kubectlCmd.Stdin = os.Stdin
 			kubectlCmd.Stdout = os.Stdout
@@ -64,10 +102,33 @@ func validKubectlArgsFunction(cmd *cobra.Command, args []string, toComplete stri
 	return validCompletions, cobra.ShellCompDirectiveDefault
 }
 
-func kubectlPreflightCheck() error {
-	_, err := exec.LookPath("kubectl")
-	if err != nil {
-		return fmt.Errorf("kubectl not found in PATH")
+func isCommandBlocked(args []string, blockedCmds []string) bool {
+	if len(args) > 0 {
+		for _, blockedCmd := range blockedCmds {
+			if args[0] == blockedCmd {
+				return true
+			}
+		}
 	}
-	return nil
+	return false
+}
+
+func isContextLocked(sm *state.Manager, context string, cfg config.Config) (bool, error) {
+	contextInfo, _ := sm.ContextInfo(context)
+	if contextInfo.Locked == nil && cfg.Contexts.DefaultLocked != nil {
+		regex, err := regexp.Compile(*cfg.Contexts.DefaultLocked)
+		if err != nil {
+			return false, fmt.Errorf("failed to compile regex: %w", err)
+		}
+
+		if regex.MatchString(context) {
+			return true, nil
+		}
+	}
+
+	if contextInfo.Locked != nil && *contextInfo.Locked == true {
+		return true, nil
+	}
+
+	return false, nil
 }
