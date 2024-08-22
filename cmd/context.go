@@ -26,6 +26,7 @@ func NewContextCommand() *cobra.Command {
 		Long: `Start a shell with the KUBECONFIG environment variable set to the selected context.
 Kubert will issue a temporary kubeconfig file with the selected context, so that multiple shells can be spawned with different contexts.`,
 		Aliases:           []string{"context"},
+		SilenceUsage:      true,
 		ValidArgsFunction: validContextArgsFunction,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			cfg := config.Cfg
@@ -183,6 +184,9 @@ func launchShellWithKubeconfig(kubeconfigPath string) error {
 	shellCmd.Stderr = os.Stderr
 
 	if err := shellCmd.Run(); err != nil {
+		if exitErr, ok := err.(*exec.ExitError); ok && exitErr.ExitCode() == 130 {
+			return nil // Exit code 130 means the user exited the shell with Ctrl+D, so we don't return an error
+		}
 		return fmt.Errorf("failed to launch shell: %w", err)
 	}
 

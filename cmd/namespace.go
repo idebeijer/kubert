@@ -25,6 +25,7 @@ func NewNamespaceCommand() *cobra.Command {
 		PreRunE: func(cmd *cobra.Command, args []string) error {
 			return kubert.ShellPreFlightCheck()
 		},
+		SilenceUsage:      true,
 		ValidArgsFunction: validNamespaceArgsFunction,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			ctx := context.Background()

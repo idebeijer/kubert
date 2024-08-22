@@ -51,14 +51,12 @@ func NewKubectlCommand() *cobra.Command {
 				return err
 			}
 
-			if locked {
-				if isCommandBlocked(args, cfg.Contexts.BlockedKubectlCommands) {
-					fmt.Printf("Oops: you tried to run the kubectl command \"%s\" in the locked context \"%s\".\n\n"+
-						"The command has not been executed because the \"%s\" command is on the blocked list, and the current context is locked.\n"+
-						"Use 'kubert context-lock unlock' to unlock the current context.\n"+
-						"Exiting...\n", args[0], clientConfig.CurrentContext, args[0])
-					return nil
-				}
+			if locked && isCommandBlocked(args, cfg.Contexts.BlockedKubectlCommands) {
+				fmt.Printf("Oops: you tried to run the kubectl command \"%s\" in the locked context \"%s\".\n\n"+
+					"The command has not been executed because the \"%s\" command is on the blocked list, and the current context is locked.\n"+
+					"Use 'kubert context-lock unlock' to unlock the current context.\n"+
+					"Exiting...\n", args[0], clientConfig.CurrentContext, args[0])
+				return nil
 			}
 
 			kubectlCmd := exec.Command("kubectl", args...)
