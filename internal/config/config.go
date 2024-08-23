@@ -34,6 +34,9 @@ type Contexts struct {
 
 	// ProtectedKubectlCommands is a list of kubectl commands that should be blocked when the context is protected.
 	ProtectedKubectlCommands []string `mapstructure:"protectedKubectlCommands" yaml:"protectedKubectlCommands"`
+
+	// ExitOnProtectedKubectlCmd disables the default confirmation prompt and instead immediately exits out if the context is protected.
+	ExitOnProtectedKubectlCmd bool `mapstructure:"exitOnProtectedKubectlCmd" yaml:"exitOnProtectedKubectlCmd"`
 }
 
 func init() {
@@ -57,6 +60,7 @@ func init() {
 		"patch",
 		"set",
 	})
+	viper.SetDefault("contexts.exitOnProtectedKubectlCmd", false)
 }
 
 func GenerateDefaultYAML() (string, error) {

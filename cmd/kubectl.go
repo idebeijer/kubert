@@ -7,6 +7,7 @@ import (
 	"regexp"
 	"strings"
 
+	"github.com/fatih/color"
 	"github.com/idebeijer/kubert/internal/config"
 	"github.com/idebeijer/kubert/internal/kubert"
 	"github.com/idebeijer/kubert/internal/state"
@@ -32,6 +33,7 @@ func NewKubectlCommand() *cobra.Command {
 			return kubert.ShellPreFlightCheck()
 		},
 		SilenceUsage:      true,
+		SilenceErrors:     true,
 		ValidArgsFunction: validKubectlArgsFunction,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			cfg := config.Cfg
@@ -52,11 +54,21 @@ func NewKubectlCommand() *cobra.Command {
 			}
 
 			if locked && isCommandProtected(args, cfg.Contexts.ProtectedKubectlCommands) {
-				fmt.Printf("Oops: you tried to run the kubectl command \"%s\" in the protected context \"%s\".\n\n"+
-					"The command has not been executed because the \"%s\" command is on the protected kubectl commands list, and the current context is locked.\n"+
-					"Use 'kubert context-protection unprotect' to unprotect the current context.\n"+
-					"Exiting...\n", args[0], clientConfig.CurrentContext, args[0])
-				return nil
+
+				if cfg.Contexts.ExitOnProtectedKubectlCmd {
+					fmt.Printf("You tried to run the protected kubectl command \"%s\" in the protected context \"%s\".\n\n"+
+						"The command has not been executed and kubert will exit immediately.\n"+
+						"Exiting...\n", args[0], clientConfig.CurrentContext)
+					return nil
+				}
+
+				yellow := color.New(color.FgHiYellow).SprintFunc()
+				fmt.Printf("%s: you tried to run the protected kubectl command \"%s\" in the protected context \"%s\".\n\n", yellow("WARNING"), args[0], clientConfig.CurrentContext)
+				if !promptUserConfirmation() {
+					fmt.Println("Exiting...")
+					return nil
+				}
+				fmt.Println()
 			}
 
 			kubectlCmd := exec.Command("kubectl", args...)
