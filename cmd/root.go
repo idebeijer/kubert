@@ -3,6 +3,7 @@ package cmd
 import (
 	"log/slog"
 	"os"
+	"path/filepath"
 
 	"github.com/idebeijer/kubert/cmd/contextprotection"
 	"github.com/idebeijer/kubert/cmd/kubeconfig"
@@ -45,7 +46,7 @@ func (c *RootCmd) initFlags() {
 	c.PersistentFlags().Bool("debug", false, "debug mode")
 	_ = viper.BindPFlag("debug", c.PersistentFlags().Lookup("debug"))
 
-	c.PersistentFlags().StringVar(&c.cfgFile, "config", "", "config file (default is $HOME/.kubert.yaml)")
+	c.PersistentFlags().StringVar(&c.cfgFile, "config", "", "config file (default is $HOME/.kubert/config.yaml)")
 }
 
 func (c *RootCmd) addCommands() {
@@ -67,10 +68,10 @@ func (c *RootCmd) initConfig() {
 		home, err := os.UserHomeDir()
 		cobra.CheckErr(err)
 
-		// Search config in home directory with name ".kubert.yaml" (with extension).
-		viper.AddConfigPath(home)
+		// Search config in home directory
+		viper.AddConfigPath(filepath.Join(home, ".kubert"))
 		viper.SetConfigType("yaml")
-		viper.SetConfigName(".kubert.yaml")
+		viper.SetConfigName("config")
 	}
 
 	viper.SetEnvPrefix("kubert")

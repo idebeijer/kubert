@@ -171,6 +171,11 @@ func launchShellWithKubeconfig(kubeconfigPath string) error {
 		return fmt.Errorf("failed to set KUBERT_SHELL_KUBECONFIG environment variable: %w", err)
 	}
 
+	statefile, _ := state.FilePath()
+	if err := os.Setenv(kubert.ShellStateFilePathEnvVar, statefile); err != nil {
+		return fmt.Errorf("failed to set KUBERT_SHELL_STATE_FILE environment variable: %w", err)
+	}
+
 	// Get the user's preferred shell from the SHELL environment variable
 	shell := os.Getenv("SHELL")
 	if shell == "" {

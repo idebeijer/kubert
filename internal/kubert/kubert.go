@@ -11,6 +11,9 @@ const (
 
 	// ShellKubeconfigEnvVar is the environment variable that is set to the path of the temporary kubeconfig file.
 	ShellKubeconfigEnvVar = "KUBERT_SHELL_KUBECONFIG"
+
+	// ShellStateFilePathEnvVar is the environment variable that is set to the path of the state file.
+	ShellStateFilePathEnvVar = "KUBERT_SHELL_STATE_FILE"
 )
 
 // ShellPreFlightCheck checks if the shell was started by Kubert and if the kubeconfig file is the same as the one set by Kubert.
