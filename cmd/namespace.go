@@ -6,6 +6,7 @@ import (
 	"os"
 
 	"github.com/idebeijer/kubert/internal/fzf"
+	"github.com/idebeijer/kubert/internal/kubert"
 	"github.com/idebeijer/kubert/internal/state"
 	"github.com/spf13/cobra"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -22,8 +23,9 @@ func NewNamespaceCommand() *cobra.Command {
 		Long:    `Switch to a different namespace in the current Kubert shell. Other shells with the same context will not be affected.`,
 		Aliases: []string{"namespace"},
 		PreRunE: func(cmd *cobra.Command, args []string) error {
-			return preflightCheck()
+			return kubert.ShellPreFlightCheck()
 		},
+		SilenceUsage:      true,
 		ValidArgsFunction: validNamespaceArgsFunction,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			ctx := context.Background()
@@ -117,10 +119,6 @@ func switchNamespace(sm *state.Manager, namespace string, namespaces []string) e
 	}
 
 	kubeconfigPath := os.Getenv("KUBECONFIG")
-	if kubeconfigPath == "" {
-		kubeconfigPath = clientcmd.RecommendedHomeFile
-	}
-
 	config, err := clientcmd.LoadFromFile(kubeconfigPath)
 	if err != nil {
 		return err
@@ -134,36 +132,6 @@ func switchNamespace(sm *state.Manager, namespace string, namespaces []string) e
 
 	if err := sm.SetLastNamespaceWithContextCreation(config.CurrentContext, namespace); err != nil {
 		return err
-	}
-
-	return nil
-}
-
-func preflightCheck() error {
-	kubeconfigPath := os.Getenv("KUBECONFIG")
-	if kubeconfigPath == "" {
-		kubeconfigPath = clientcmd.RecommendedHomeFile
-	}
-
-	if _, err := os.Stat(kubeconfigPath); os.IsNotExist(err) {
-		return fmt.Errorf("kubeconfig file not found at %s", kubeconfigPath)
-	}
-
-	if kubertActive := os.Getenv(KubertShellActiveEnvVar); kubertActive != "1" {
-		return fmt.Errorf("shell not started by kubert")
-	}
-
-	kubertKubeconfig := os.Getenv(KubertShellKubeconfigEnvVar)
-	if kubertKubeconfig == "" {
-		return fmt.Errorf("kubeconfig file not found in environment")
-	}
-
-	// Check if the kubeconfig file is the same as the one set by kubert,
-	// if not, it means that the user or some other process has changed the KUBECONFIG environment variable
-	// and kubert should not interfere with it, so kubert will choose to exit instead
-	if kubertKubeconfig != kubeconfigPath {
-		return fmt.Errorf("KUBECONFIG environment variable does not match kubert kubeconfig," +
-			" to prevent kubert from interfering with your original kubeconfigs, please start a new shell with kubert")
 	}
 
 	return nil

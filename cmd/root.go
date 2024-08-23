@@ -3,20 +3,14 @@ package cmd
 import (
 	"log/slog"
 	"os"
+	"path/filepath"
 
+	"github.com/idebeijer/kubert/cmd/contextprotection"
 	"github.com/idebeijer/kubert/cmd/kubeconfig"
 	"github.com/idebeijer/kubert/internal/config"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 	_ "k8s.io/client-go/plugin/pkg/client/auth"
-)
-
-const (
-	// KubertShellActiveEnvVar is the environment variable that is set to indicate that Kubert is active.
-	KubertShellActiveEnvVar = "KUBERT_SHELL_ACTIVE"
-
-	// KubertShellKubeconfigEnvVar is the environment variable that is set to the path of the temporary kubeconfig file.
-	KubertShellKubeconfigEnvVar = "KUBERT_SHELL_KUBECONFIG"
 )
 
 type RootCmd struct {
@@ -52,13 +46,15 @@ func (c *RootCmd) initFlags() {
 	c.PersistentFlags().Bool("debug", false, "debug mode")
 	_ = viper.BindPFlag("debug", c.PersistentFlags().Lookup("debug"))
 
-	c.PersistentFlags().StringVar(&c.cfgFile, "config", "", "config file (default is $HOME/.kubert.yaml)")
+	c.PersistentFlags().StringVar(&c.cfgFile, "config", "", "config file (default is $HOME/.kubert/config.yaml)")
 }
 
 func (c *RootCmd) addCommands() {
 	c.AddCommand(kubeconfig.NewCommand())
+	c.AddCommand(contextprotection.NewCommand())
 	c.AddCommand(NewContextCommand())
 	c.AddCommand(NewNamespaceCommand())
+	c.AddCommand(NewKubectlCommand())
 }
 
 func (c *RootCmd) initConfig() {
@@ -72,10 +68,10 @@ func (c *RootCmd) initConfig() {
 		home, err := os.UserHomeDir()
 		cobra.CheckErr(err)
 
-		// Search config in home directory with name ".kubert.yaml" (with extension).
-		viper.AddConfigPath(home)
+		// Search config in home directory
+		viper.AddConfigPath(filepath.Join(home, ".kubert"))
 		viper.SetConfigType("yaml")
-		viper.SetConfigName(".kubert.yaml")
+		viper.SetConfigName("config")
 	}
 
 	viper.SetEnvPrefix("kubert")

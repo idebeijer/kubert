@@ -56,6 +56,10 @@ func NewManager() (*Manager, error) {
 	return manager, nil
 }
 
+func FilePath() (string, error) {
+	return filepath.Join(xdg.DataHome, appName, stateFile), nil
+}
+
 func (m *Manager) Lock() error {
 	m.mutex.Lock()
 	return m.fileLock.Lock()
