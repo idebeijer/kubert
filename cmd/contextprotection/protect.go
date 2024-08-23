@@ -1,4 +1,4 @@
-package contextlock
+package contextprotection
 
 import (
 	"github.com/idebeijer/kubert/internal/kubert"
@@ -7,13 +7,13 @@ import (
 	"github.com/spf13/cobra"
 )
 
-func NewDeleteCommand() *cobra.Command {
+func NewProtectCommand() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "delete",
-		Short: "Delete lock setting for the current context",
-		Long: `Delete lock setting for the current context.
+		Use:   "protect",
+		Short: "Protect current context",
+		Long: `Protect current context.
 
-This will delete the explicit lock/unlock setting for the current context. So if either "lock" or "unlock" was set, it will be removed and the default will be used.`,
+This will set an explicit "protect" for the current context. That means it wil override the default setting. If the current context should use the default again, use "kubert context-protection delete".`,
 		PreRunE: func(cmd *cobra.Command, args []string) error {
 			return kubert.ShellPreFlightCheck()
 		},
@@ -28,7 +28,7 @@ This will delete the explicit lock/unlock setting for the current context. So if
 				return err
 			}
 
-			if err := sm.DeleteContextLock(clientConfig.CurrentContext); err != nil {
+			if err := sm.SetContextProtection(clientConfig.CurrentContext, true); err != nil {
 				return err
 			}
 

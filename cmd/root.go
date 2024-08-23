@@ -4,7 +4,7 @@ import (
 	"log/slog"
 	"os"
 
-	"github.com/idebeijer/kubert/cmd/contextlock"
+	"github.com/idebeijer/kubert/cmd/contextprotection"
 	"github.com/idebeijer/kubert/cmd/kubeconfig"
 	"github.com/idebeijer/kubert/internal/config"
 	"github.com/spf13/cobra"
@@ -50,7 +50,7 @@ func (c *RootCmd) initFlags() {
 
 func (c *RootCmd) addCommands() {
 	c.AddCommand(kubeconfig.NewCommand())
-	c.AddCommand(contextlock.NewCommand())
+	c.AddCommand(contextprotection.NewCommand())
 	c.AddCommand(NewContextCommand())
 	c.AddCommand(NewNamespaceCommand())
 	c.AddCommand(NewKubectlCommand())

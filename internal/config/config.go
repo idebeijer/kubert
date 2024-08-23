@@ -29,11 +29,11 @@ type LocalKubeconfigProvider struct {
 }
 
 type Contexts struct {
-	// DefaultLocked is a regex that matches contexts that should be locked by default.
-	DefaultLocked *string `mapstructure:"defaultLocked" yaml:"defaultLocked"`
+	// ProtectedByDefaultRegexp is a regex that matches contexts that should be protected by default.
+	ProtectedByDefaultRegexp *string `mapstructure:"protectedByDefaultRegexp" yaml:"protectedByDefaultRegexp"`
 
-	// BlockedKubectlCommands is a list of kubectl commands that should be blocked when the context is locked.
-	BlockedKubectlCommands []string `mapstructure:"blockedKubectlCommands" yaml:"blockedKubectlCommands"`
+	// ProtectedKubectlCommands is a list of kubectl commands that should be blocked when the context is protected.
+	ProtectedKubectlCommands []string `mapstructure:"protectedKubectlCommands" yaml:"protectedKubectlCommands"`
 }
 
 func init() {
@@ -42,9 +42,8 @@ func init() {
 	})
 	viper.SetDefault("kubeconfigs.exclude", []string{})
 	viper.SetDefault("interactiveShellMode", true)
-	viper.SetDefault("defaultLockedContexts", []string{})
-	viper.SetDefault("contexts.defaultLocked", nil)
-	viper.SetDefault("contexts.blockedKubectlCommands", []string{
+	viper.SetDefault("contexts.protectedByDefaultRegexp", nil)
+	viper.SetDefault("contexts.protectedKubectlCommands", []string{
 		"delete",
 		"edit",
 		"exec",
@@ -52,6 +51,7 @@ func init() {
 		"cordon",
 		"uncordon",
 		"scale",
+		"autoscale",
 		"replace",
 		"apply",
 		"patch",

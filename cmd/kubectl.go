@@ -20,7 +20,7 @@ func NewKubectlCommand() *cobra.Command {
 	cmd = &cobra.Command{
 		Use:                "kubectl",
 		Short:              "Wrapper for kubectl",
-		Long:               `Wrapper for kubectl, to support context locking.`,
+		Long:               `Wrapper for kubectl, to support context protection with "kubert context-protection".`,
 		DisableFlagParsing: true,
 		Aliases:            []string{"namespace"},
 		PreRunE: func(cmd *cobra.Command, args []string) error {
@@ -46,15 +46,15 @@ func NewKubectlCommand() *cobra.Command {
 				return err
 			}
 
-			locked, err := isContextLocked(sm, clientConfig.CurrentContext, cfg)
+			locked, err := isContextProtected(sm, clientConfig.CurrentContext, cfg)
 			if err != nil {
 				return err
 			}
 
-			if locked && isCommandBlocked(args, cfg.Contexts.BlockedKubectlCommands) {
-				fmt.Printf("Oops: you tried to run the kubectl command \"%s\" in the locked context \"%s\".\n\n"+
-					"The command has not been executed because the \"%s\" command is on the blocked list, and the current context is locked.\n"+
-					"Use 'kubert context-lock unlock' to unlock the current context.\n"+
+			if locked && isCommandProtected(args, cfg.Contexts.ProtectedKubectlCommands) {
+				fmt.Printf("Oops: you tried to run the kubectl command \"%s\" in the protected context \"%s\".\n\n"+
+					"The command has not been executed because the \"%s\" command is on the protected kubectl commands list, and the current context is locked.\n"+
+					"Use 'kubert context-protection unprotect' to unprotect the current context.\n"+
 					"Exiting...\n", args[0], clientConfig.CurrentContext, args[0])
 				return nil
 			}
@@ -68,6 +68,13 @@ func NewKubectlCommand() *cobra.Command {
 	}
 
 	return cmd
+}
+
+func promptUserConfirmation() bool {
+	var response string
+	fmt.Print("Are you sure you want to continue? [y/N]: ")
+	fmt.Scanln(&response)
+	return strings.ToLower(response) == "y" || strings.ToLower(response) == "yes"
 }
 
 func validKubectlArgsFunction(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
@@ -100,7 +107,7 @@ func validKubectlArgsFunction(cmd *cobra.Command, args []string, toComplete stri
 	return validCompletions, cobra.ShellCompDirectiveDefault
 }
 
-func isCommandBlocked(args []string, blockedCmds []string) bool {
+func isCommandProtected(args []string, blockedCmds []string) bool {
 	if len(args) > 0 {
 		for _, blockedCmd := range blockedCmds {
 			if args[0] == blockedCmd {
@@ -111,10 +118,10 @@ func isCommandBlocked(args []string, blockedCmds []string) bool {
 	return false
 }
 
-func isContextLocked(sm *state.Manager, context string, cfg config.Config) (bool, error) {
+func isContextProtected(sm *state.Manager, context string, cfg config.Config) (bool, error) {
 	contextInfo, _ := sm.ContextInfo(context)
-	if contextInfo.Locked == nil && cfg.Contexts.DefaultLocked != nil {
-		regex, err := regexp.Compile(*cfg.Contexts.DefaultLocked)
+	if contextInfo.Protected == nil && cfg.Contexts.ProtectedByDefaultRegexp != nil {
+		regex, err := regexp.Compile(*cfg.Contexts.ProtectedByDefaultRegexp)
 		if err != nil {
 			return false, fmt.Errorf("failed to compile regex: %w", err)
 		}
@@ -124,7 +131,7 @@ func isContextLocked(sm *state.Manager, context string, cfg config.Config) (bool
 		}
 	}
 
-	if contextInfo.Locked != nil && *contextInfo.Locked == true {
+	if contextInfo.Protected != nil && *contextInfo.Protected == true {
 		return true, nil
 	}
 

@@ -1,4 +1,4 @@
-package contextlock
+package contextprotection
 
 import (
 	"github.com/idebeijer/kubert/internal/kubert"
@@ -7,13 +7,13 @@ import (
 	"github.com/spf13/cobra"
 )
 
-func NewUnlockCommand() *cobra.Command {
+func NewUnprotectCommand() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "unlock",
-		Short: "Unlock current context",
-		Long: `Unlock current context. 
+		Use:   "unprotect",
+		Short: "Unprotect current context",
+		Long: `Unprotect current context. 
 
-This will set an explicit "unlock" for the current context. That means it wil override the default setting. If the current context should use the default again, use "kubert context-lock delete".`,
+This will set an explicit "unprotect" for the current context. That means it wil override the default setting. If the current context should use the default again, use "kubert context-protection delete".`,
 		PreRunE: func(cmd *cobra.Command, args []string) error {
 			return kubert.ShellPreFlightCheck()
 		},
@@ -28,7 +28,7 @@ This will set an explicit "unlock" for the current context. That means it wil ov
 				return err
 			}
 
-			if err := sm.SetContextLock(clientConfig.CurrentContext, false); err != nil {
+			if err := sm.SetContextProtection(clientConfig.CurrentContext, false); err != nil {
 				return err
 			}
 

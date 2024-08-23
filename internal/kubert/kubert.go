@@ -15,13 +15,13 @@ const (
 
 // ShellPreFlightCheck checks if the shell was started by Kubert and if the kubeconfig file is the same as the one set by Kubert.
 func ShellPreFlightCheck() error {
+	if kubertActive := os.Getenv(ShellActiveEnvVar); kubertActive != "1" {
+		return fmt.Errorf("shell not started by kubert")
+	}
+
 	kubeconfigPath := os.Getenv("KUBECONFIG")
 	if _, err := os.Stat(kubeconfigPath); os.IsNotExist(err) {
 		return fmt.Errorf("kubeconfig file not found at %s", kubeconfigPath)
-	}
-
-	if kubertActive := os.Getenv(ShellActiveEnvVar); kubertActive != "1" {
-		return fmt.Errorf("shell not started by kubert")
 	}
 
 	kubertKubeconfig := os.Getenv(ShellKubeconfigEnvVar)

@@ -15,7 +15,7 @@ func (e *ContextNotFoundError) Error() string {
 
 type ContextInfo struct {
 	LastNamespace string `json:"last_namespace"`
-	Locked        *bool  `json:"locked,omitempty"`
+	Protected     *bool  `json:"protected,omitempty"`
 }
 
 func (m *Manager) ContextInfo(context string) (ContextInfo, bool) {
@@ -57,36 +57,36 @@ func (m *Manager) ListContexts() []string {
 	return contexts
 }
 
-func (m *Manager) SetContextLock(context string, locked bool) error {
+func (m *Manager) SetContextProtection(context string, locked bool) error {
 	info, exists := m.state.Contexts[context]
 	if !exists {
 		return &ContextNotFoundError{Context: context}
 	}
-	info.Locked = &locked
+	info.Protected = &locked
 	m.state.Contexts[context] = info
 	return m.Save()
 }
 
-// DeleteContextLock deletes the Locked field by setting it to nil
-func (m *Manager) DeleteContextLock(context string) error {
+// DeleteContextProtection deletes the Protected field by setting it to nil
+func (m *Manager) DeleteContextProtection(context string) error {
 	info, exists := m.state.Contexts[context]
 	if !exists {
 		return &ContextNotFoundError{Context: context}
 	}
-	info.Locked = nil
+	info.Protected = nil
 	m.state.Contexts[context] = info
 	return m.Save()
 }
 
-func (m *Manager) IsContextLocked(context string) (bool, error) {
+func (m *Manager) IsContextProtected(context string) (bool, error) {
 	info, exists := m.state.Contexts[context]
 	if !exists {
 		return false, &ContextNotFoundError{Context: context}
 	}
-	if info.Locked == nil {
+	if info.Protected == nil {
 		return false, nil
 	}
-	return *info.Locked, nil
+	return *info.Protected, nil
 }
 
 func (m *Manager) EnsureContextExists(context string) {
