@@ -22,6 +22,7 @@ What kubectl commands should be blocked can be configured in the kubert configur
 	cmd.AddCommand(NewProtectCommand())
 	cmd.AddCommand(NewUnprotectCommand())
 	cmd.AddCommand(NewDeleteCommand())
+	cmd.AddCommand(NewInfoCommand())
 
 	return cmd
 }
