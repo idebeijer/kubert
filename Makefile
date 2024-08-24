@@ -44,3 +44,13 @@ docker-build:
 .PHONY: docker-push
 docker-push:
 	$(CONTAINER_TOOL) push ${IMG}
+
+##@ Utils
+
+.PHONY: docs
+docs:
+	go run tools/docs.go
+
+.PHONY: generate-default-config
+generate-default-config:
+	go run tools/generate_default_cfg.go

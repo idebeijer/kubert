@@ -30,6 +30,8 @@ brews:
     dependencies:
       - name: fzf
         type: optional
+      - name: kubectl
+        type: optional
     install: |
       bin.install "kubert"
       zsh_completion.install "completions/kubert.zsh" => "_kubert"
@@ -40,7 +42,7 @@ changelog:
   sort: asc
   groups:
     - title: "Breaking changes"
-      regexp: '^.*?(feat|fix|build|ci|chore|refactor|perf|test|revert)(\([a-zA-Z0-9_\-]+\))?!:\s?.+$'
+      regexp: '^.*?\w+(\([a-zA-Z0-9_\-]+\))?!:\s?.+$'
       order: 0
     - title: Features
       regexp: '^.*?feat(\([a-zA-Z0-9_\-]+\))?(!)?:\s?.+$'

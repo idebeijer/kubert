@@ -23,7 +23,12 @@ func NewRootCmd() *RootCmd {
 	cmd := &RootCmd{}
 	cmd.Command = &cobra.Command{
 		Use:   "kubert",
-		Short: "kubert",
+		Short: "kubert is a tool to switch kubernetes contexts and namespaces",
+		Long: `kubert is a CLI tool to switch kubernetes contexts and namespaces within an isolated shell so you can have multiple shells with different contexts and namespaces.
+
+It also includes a wrapper around kubectl to provide the ability to protect contexts by setting a regex pattern to match the context name. This can be used to prevent accidentally running certain kubectl commands in an unwanted context.
+Keep in mind, this will only work when using kubectl through the "kubert kubectl" command. Direct commands using just "kubectl" will not be blocked. (If you use this feature, you could set an alias e.g. "k" for "kubert kubectl".)
+`,
 		PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
 			return nil
 		},
