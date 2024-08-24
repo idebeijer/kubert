@@ -33,7 +33,6 @@ func NewKubectlCommand() *cobra.Command {
 			return kubert.ShellPreFlightCheck()
 		},
 		SilenceUsage:      true,
-		SilenceErrors:     true,
 		ValidArgsFunction: validKubectlArgsFunction,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			cfg := config.Cfg
@@ -75,7 +74,14 @@ func NewKubectlCommand() *cobra.Command {
 			kubectlCmd.Stdin = os.Stdin
 			kubectlCmd.Stdout = os.Stdout
 			kubectlCmd.Stderr = os.Stderr
-			return kubectlCmd.Run()
+			if err := kubectlCmd.Run(); err != nil {
+				if _, ok := err.(*exec.ExitError); ok {
+					// Return nil to avoid duplicating the error message given by kubectl
+					return nil
+				}
+				return fmt.Errorf("kubectl error: %w", err)
+			}
+			return nil
 		},
 	}
 
