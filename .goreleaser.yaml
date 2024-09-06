@@ -42,17 +42,23 @@ changelog:
   sort: asc
   groups:
     - title: "Breaking changes"
-      regexp: '^.*?\w+(\([a-zA-Z0-9_\-]+\))?!:\s?.+$'
+      regexp: '^.*?\w+(\(.+\))?!:\s?.+$'
       order: 0
-    - title: Features
-      regexp: '^.*?feat(\([a-zA-Z0-9_\-]+\))?(!)?:\s?.+$'
+    - title: "Features"
+      regexp: '^.*?feat(\(.+\))??!?:.+$'
       order: 1
     - title: "Bug fixes"
-      regexp: '^.*?fix(\([a-zA-Z0-9_\-]+\))?(!)?:\s?.+$'
+      regexp: '^.*?fix(\(.+\))??!?:.+$'
       order: 2
-    - title: Others
+    - title: "Documentation"
+      regexp: '^.*?docs(\(.+\))??!?:.+$'
+      order: 3
+    - title: "Build system"
+      regexp: '^.*?(build|ci)(\(.+\))??!?:.+$'
+      order: 4
+    - title: "Others"
       order: 999
   filters:
     exclude:
-      - '^.*?(docs|test|style|build|ci)(\([a-zA-Z0-9_\-]+\))?!?:\s?.+$'
+      - '^.*?(test|style)(\(.+\))??!?:.+$'
       - 'initial commit'
