@@ -12,6 +12,7 @@ import (
 func main() {
 	kubertCmd := cmd.NewRootCmd()
 
+	kubertCmd.DisableAutoGenTag = true
 	if err := doc.GenMarkdownTree(kubertCmd.Command, "./docs"); err != nil {
 		log.Fatal(err)
 	}
