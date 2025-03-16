@@ -27,3 +27,6 @@ completions/
 
 # Exclude Mac OS X system files
 .DS_Store
+
+# Exclude binary build output
+kubert
