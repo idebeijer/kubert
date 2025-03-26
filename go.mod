@@ -7,7 +7,7 @@ require (
 	github.com/fatih/color v1.18.0
 	github.com/gofrs/flock v0.12.1
 	github.com/spf13/cobra v1.9.1
-	github.com/spf13/viper v1.20.0
+	github.com/spf13/viper v1.20.1
 	gopkg.in/yaml.v3 v3.0.1
 	k8s.io/apimachinery v0.32.3
 	k8s.io/client-go v0.32.3
