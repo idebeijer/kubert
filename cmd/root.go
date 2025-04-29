@@ -74,7 +74,7 @@ func (c *RootCmd) initConfig() {
 		cobra.CheckErr(err)
 
 		// Search config in home directory
-		viper.AddConfigPath(filepath.Join(home, ".kubert"))
+		viper.AddConfigPath(filepath.Join(home, ".config/kubert"))
 		viper.SetConfigType("yaml")
 		viper.SetConfigName("config")
 	}
