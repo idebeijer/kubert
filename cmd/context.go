@@ -67,7 +67,7 @@ Kubert will issue a temporary kubeconfig file with the selected context, so that
 
 			slog.Debug("Created a new kubeconfig with the specified context", "tempKubeconfig", tempKubeconfig.Name())
 
-			return launchShellWithKubeconfig(tempKubeconfig.Name())
+			return launchShellWithKubeconfig(tempKubeconfig.Name(), selectedContext.FilePath)
 		},
 	}
 
@@ -159,7 +159,7 @@ func createTempKubeconfigFile(kubeconfigPath, selectedContextName, namespace str
 	return tempKubeconfig, cleanup, nil
 }
 
-func launchShellWithKubeconfig(kubeconfigPath string) error {
+func launchShellWithKubeconfig(kubeconfigPath, originalKubeconfigPath string) error {
 	// Set the KUBECONFIG environment variable to the path of the temporary kubeconfig file
 	if err := os.Setenv("KUBECONFIG", kubeconfigPath); err != nil {
 		return fmt.Errorf("failed to set KUBECONFIG environment variable: %w", err)
@@ -169,6 +169,9 @@ func launchShellWithKubeconfig(kubeconfigPath string) error {
 	}
 	if err := os.Setenv(kubert.ShellKubeconfigEnvVar, kubeconfigPath); err != nil {
 		return fmt.Errorf("failed to set KUBERT_SHELL_KUBECONFIG environment variable: %w", err)
+	}
+	if err := os.Setenv(kubert.ShellOriginalKubeconfigEnvVar, originalKubeconfigPath); err != nil {
+		return fmt.Errorf("failed to set KUBERT_SHELL_ORIGINAL_KUBECONFIG environment variable: %w", err)
 	}
 
 	statefile, _ := state.FilePath()
