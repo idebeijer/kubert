@@ -44,6 +44,10 @@ homebrew_casks:
             system_command "/usr/bin/xattr", args: ["-dr", "com.apple.quarantine", "#{staged_path}/kubert"]
           end
 
+release:
+  footer: |
+    **Full Changelog**: https://github.com/idebeijer/kubert/compare/{{ .PreviousTag }}...{{ .Tag }}
+
 changelog:
   sort: asc
   groups:
