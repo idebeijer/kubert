@@ -15,28 +15,34 @@ builds:
       - linux
       - windows
       - darwin
+    goarch:
+      - amd64
+      - arm64
 
 archives:
-  - files:
+  - id: completions
+    files:
       - completions/*
 
-brews:
+homebrew_casks:
   - repository:
       owner: idebeijer
       name: homebrew-tap
       token: "{{ .Env.HOMEBREW_TAP_GITHUB_TOKEN }}"
-    directory: Formula
     homepage: "https://github.com/idebeijer/kubert"
-    dependencies:
-      - name: fzf
-        type: optional
-      - name: kubectl
-        type: optional
-    install: |
-      bin.install "kubert"
-      zsh_completion.install "completions/kubert.zsh" => "_kubert"
-      bash_completion.install "completions/kubert.bash" => "kubert"
-      fish_completion.install "completions/kubert.fish"
+    completions:
+      bash: completions/kubert.bash
+      zsh: completions/kubert.zsh
+      fish: completions/kubert.fish
+    conflicts:
+      - formula: kubert
+    hooks:
+      post:
+        install: |
+          if system_command("/usr/bin/xattr", args: ["-h"]).exit_status == 0
+            # replace 'kubert' with the actual binary name
+            system_command "/usr/bin/xattr", args: ["-dr", "com.apple.quarantine", "#{staged_path}/kubert"]
+          end
 
 changelog:
   sort: asc

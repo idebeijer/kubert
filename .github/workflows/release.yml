@@ -16,12 +16,9 @@ jobs:
         env:
           HOMEBREW_TAP_GITHUB_TOKEN: ${{ secrets.HOMEBREW_TAP_GITHUB_TOKEN }}
         run: |
-          response=$(curl -s -o /dev/null -w "%{http_code}" -H "Authorization: token $HOMEBREW_TAP_GITHUB_TOKEN" https://api.github.com/user)
-          if [ "$response" -ne 200 ]; then
-            echo "PAT is invalid or expired"
-            exit 1
-          fi
-          echo "PAT is valid"
+          curl -f \
+            -H "Authorization: token ${{ secrets.HOMEBREW_TAP_GITHUB_TOKEN }}" \
+            https://api.github.com/repos/${{ github.repository_owner }}/homebrew-tap
 
   goreleaser:
     runs-on: ubuntu-latest
@@ -35,7 +32,7 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
-          go-version-file: 'go.mod'
+          go-version-file: "go.mod"
 
       - name: Run GoReleaser
         uses: goreleaser/goreleaser-action@v6
