@@ -50,6 +50,7 @@ release:
 
 changelog:
   sort: asc
+  use: github
   groups:
     - title: "Breaking changes"
       regexp: '^.*?\w+(\(.+\))?!:\s?.+$'
