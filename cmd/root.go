@@ -51,7 +51,7 @@ func (c *RootCmd) initFlags() {
 	c.PersistentFlags().Bool("debug", false, "debug mode")
 	_ = viper.BindPFlag("debug", c.PersistentFlags().Lookup("debug"))
 
-	c.PersistentFlags().StringVar(&c.cfgFile, "config", "", "config file (default is $HOME/.kubert/config.yaml)")
+	c.PersistentFlags().StringVar(&c.cfgFile, "config", "", "config file (default is $HOME/.config/kubert/config.yaml)")
 }
 
 func (c *RootCmd) addCommands() {
