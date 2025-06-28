@@ -24,6 +24,14 @@ vet:
 test:
 	go test -v ./...
 
+.PHONY: test-race
+test-race: ## Run tests with race detection
+	go test -race -v ./...
+
+.PHONY: test-short
+test-short: ## Run tests in short mode
+	go test -short -v ./...
+
 ##@ Build
 
 .PHONY: build

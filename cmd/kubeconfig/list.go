@@ -11,7 +11,6 @@ import (
 func addListFlags(cmd *cobra.Command) {}
 
 func NewListCommand() *cobra.Command {
-
 	cmd := &cobra.Command{
 		Use:   "list",
 		Short: "",
@@ -20,7 +19,7 @@ func NewListCommand() *cobra.Command {
 
 			fsProvider := kubeconfig.NewFileSystemProvider(cfg.KubeconfigPaths.Include, cfg.KubeconfigPaths.Exclude)
 
-			loader := kubeconfig.NewLoader(fsProvider)
+			loader := kubeconfig.NewLoader(kubeconfig.WithProvider(fsProvider))
 
 			kubeconfigs, err := loader.LoadAll()
 			if err != nil {

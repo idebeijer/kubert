@@ -2,6 +2,7 @@ package state
 
 import (
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"sync"
@@ -28,7 +29,7 @@ type Manager struct {
 
 func NewManager() (*Manager, error) {
 	dataDir := filepath.Join(xdg.DataHome, appName)
-	if err := os.MkdirAll(dataDir, 0755); err != nil {
+	if err := os.MkdirAll(dataDir, 0o755); err != nil {
 		return nil, err
 	}
 
@@ -60,41 +61,68 @@ func FilePath() (string, error) {
 	return filepath.Join(xdg.DataHome, appName, stateFile), nil
 }
 
+func (m *Manager) withLock(fn func() error) error {
+	m.mutex.Lock()
+	defer m.mutex.Unlock()
+
+	if err := m.fileLock.Lock(); err != nil {
+		return fmt.Errorf("failed to acquire file lock: %w", err)
+	}
+	defer func() {
+		if unlockErr := m.fileLock.Unlock(); unlockErr != nil {
+			// Log the error but don't override the original error
+		}
+	}()
+
+	return fn()
+}
+
+func (m *Manager) withMemoryLock(fn func() error) error {
+	m.mutex.Lock()
+	defer m.mutex.Unlock()
+	return fn()
+}
+
 func (m *Manager) Lock() error {
 	m.mutex.Lock()
-	return m.fileLock.Lock()
+	if err := m.fileLock.Lock(); err != nil {
+		m.mutex.Unlock()
+		return fmt.Errorf("failed to acquire file lock: %w", err)
+	}
+	return nil
 }
 
 func (m *Manager) Unlock() error {
-	err := m.fileLock.Unlock()
-	m.mutex.Unlock()
-	return err
+	defer m.mutex.Unlock()
+	if err := m.fileLock.Unlock(); err != nil {
+		return fmt.Errorf("failed to release file lock: %w", err)
+	}
+	return nil
 }
 
 func (m *Manager) Load() error {
-	if err := m.Lock(); err != nil {
-		return err
-	}
-	defer m.Unlock()
+	return m.withLock(func() error {
+		data, err := os.ReadFile(m.filename)
+		if err != nil {
+			return fmt.Errorf("failed to read state file: %w", err)
+		}
 
-	data, err := os.ReadFile(m.filename)
-	if err != nil {
-		return err
-	}
-
-	return json.Unmarshal(data, &m.state)
+		return json.Unmarshal(data, &m.state)
+	})
 }
 
 func (m *Manager) Save() error {
-	if err := m.Lock(); err != nil {
-		return err
-	}
-	defer m.Unlock()
+	return m.withLock(func() error {
+		return m.saveState()
+	})
+}
 
+// saveState saves the current state without acquiring locks (internal use only)
+func (m *Manager) saveState() error {
 	data, err := json.MarshalIndent(m.state, "", "  ")
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to marshal state: %w", err)
 	}
 
-	return os.WriteFile(m.filename, data, 0644)
+	return os.WriteFile(m.filename, data, 0o644)
 }

@@ -16,6 +16,11 @@ type WithPath struct {
 	FilePath string
 }
 
+type Context struct {
+	Name string
+	WithPath
+}
+
 // Provider interface for different kubeconfig sources
 type Provider interface {
 	Load() ([]WithPath, error)
@@ -50,7 +55,7 @@ func (f *FileSystemProvider) Load() ([]WithPath, error) {
 	for _, file := range filteredFiles {
 		kubeconfig, err := clientcmd.LoadFromFile(file)
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("failed to load kubeconfig from %s: %w", file, err)
 		}
 		kubeconfigs = append(kubeconfigs, WithPath{Config: kubeconfig, FilePath: file})
 	}
@@ -58,24 +63,27 @@ func (f *FileSystemProvider) Load() ([]WithPath, error) {
 	return kubeconfigs, nil
 }
 
-func expandPath(path string) string {
+func expandPath(path string) (string, error) {
 	if strings.HasPrefix(path, "~") {
 		home, err := os.UserHomeDir()
 		if err != nil {
-			fmt.Println("failed to get home directory:", err)
+			return "", fmt.Errorf("failed to get home directory for path %s: %w", path, err)
 		}
-		return filepath.Join(home, path[2:])
+		return filepath.Join(home, path[2:]), nil
 	}
-	return path
+	return path, nil
 }
 
 func findFiles(patterns []string) ([]string, error) {
 	var files []string
 	for _, pattern := range patterns {
-		expandedPattern := expandPath(pattern)
+		expandedPattern, err := expandPath(pattern)
+		if err != nil {
+			return nil, fmt.Errorf("failed to expand pattern %s: %w", pattern, err)
+		}
 		matches, err := filepath.Glob(expandedPattern)
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("failed to glob pattern %s: %w", expandedPattern, err)
 		}
 		files = append(files, matches...)
 	}
@@ -86,10 +94,13 @@ func filterFiles(files []string, excludePatterns []string) ([]string, error) {
 	var filteredFiles []string
 	excludeMap := make(map[string]bool)
 	for _, pattern := range excludePatterns {
-		expandedPattern := expandPath(pattern)
+		expandedPattern, err := expandPath(pattern)
+		if err != nil {
+			return nil, fmt.Errorf("failed to expand exclude pattern %s: %w", pattern, err)
+		}
 		matches, err := filepath.Glob(expandedPattern)
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("failed to glob exclude pattern %s: %w", expandedPattern, err)
 		}
 		for _, match := range matches {
 			excludeMap[match] = true
@@ -99,7 +110,7 @@ func filterFiles(files []string, excludePatterns []string) ([]string, error) {
 		if !excludeMap[file] {
 			info, err := os.Stat(file)
 			if err != nil {
-				return nil, err
+				return nil, fmt.Errorf("failed to stat file %s: %w", file, err)
 			}
 			if !info.IsDir() {
 				filteredFiles = append(filteredFiles, file)
@@ -114,9 +125,27 @@ type Loader struct {
 	Providers []Provider
 }
 
-// NewLoader returns a new Loader with given providers
-func NewLoader(providers ...Provider) *Loader {
-	return &Loader{Providers: providers}
+// LoaderOption is a functional option for configuring a Loader
+type LoaderOption func(*Loader)
+
+// WithProvider adds a provider to the loader
+func WithProvider(provider Provider) LoaderOption {
+	return func(l *Loader) {
+		l.Providers = append(l.Providers, provider)
+	}
+}
+
+// NewLoader creates a new Loader with the given options
+func NewLoader(options ...LoaderOption) *Loader {
+	loader := &Loader{
+		Providers: make([]Provider, 0),
+	}
+
+	for _, option := range options {
+		option(loader)
+	}
+
+	return loader
 }
 
 // LoadAll method to load all kubeconfigs from all providers
@@ -125,10 +154,35 @@ func (l *Loader) LoadAll() ([]WithPath, error) {
 	for _, provider := range l.Providers {
 		kubeconfigs, err := provider.Load()
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("provider failed to load kubeconfigs: %w", err)
 		}
 		allKubeconfigs = append(allKubeconfigs, kubeconfigs...)
 	}
 
 	return allKubeconfigs, nil
+}
+
+func (l *Loader) LoadContexts() ([]Context, error) {
+	allKubeconfigs, err := l.LoadAll()
+	if err != nil {
+		return nil, err
+	}
+
+	var contexts []Context
+	for _, kubeconfig := range allKubeconfigs {
+		if kubeconfig.Config.Contexts == nil {
+			continue
+		}
+		for contextName := range kubeconfig.Config.Contexts {
+			if contextName == "" {
+				continue
+			}
+			contexts = append(contexts, Context{
+				Name:     contextName,
+				WithPath: kubeconfig,
+			})
+		}
+	}
+
+	return contexts, nil
 }

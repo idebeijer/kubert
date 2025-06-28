@@ -30,12 +30,18 @@ Kubert will issue a temporary kubeconfig file with the selected context, so that
 		ValidArgsFunction: validContextArgsFunction,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			cfg := config.Cfg
-			fsProvider := kubeconfig.NewFileSystemProvider(cfg.KubeconfigPaths.Include, cfg.KubeconfigPaths.Exclude)
-			loader := kubeconfig.NewLoader(fsProvider)
-			contextLoader := kubeconfig.NewContextLoader(loader)
-			sm, err := state.NewManager()
 
-			contexts, err := contextLoader.LoadContexts()
+			fsProvider := kubeconfig.NewFileSystemProvider(cfg.KubeconfigPaths.Include, cfg.KubeconfigPaths.Exclude)
+			loader := kubeconfig.NewLoader(
+				kubeconfig.WithProvider(fsProvider),
+			)
+
+			sm, err := state.NewManager()
+			if err != nil {
+				return fmt.Errorf("error creating state manager: %w", err)
+			}
+
+			contexts, err := loader.LoadContexts()
 			if err != nil {
 				return fmt.Errorf("error loading contexts: %w", err)
 			}
@@ -142,7 +148,7 @@ func createTempKubeconfigFile(kubeconfigPath, selectedContextName, namespace str
 	if err != nil {
 		return nil, nil, err
 	}
-	err = os.Chmod(tempKubeconfig.Name(), 0600)
+	err = os.Chmod(tempKubeconfig.Name(), 0o600)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -204,10 +210,9 @@ func launchShellWithKubeconfig(kubeconfigPath, originalKubeconfigPath string) er
 func validContextArgsFunction(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
 	cfg := config.Cfg
 	fsProvider := kubeconfig.NewFileSystemProvider(cfg.KubeconfigPaths.Include, cfg.KubeconfigPaths.Exclude)
-	loader := kubeconfig.NewLoader(fsProvider)
-	contextLoader := kubeconfig.NewContextLoader(loader)
+	loader := kubeconfig.NewLoader(kubeconfig.WithProvider(fsProvider))
 
-	contexts, err := contextLoader.LoadContexts()
+	contexts, err := loader.LoadContexts()
 	if err != nil {
 		return nil, cobra.ShellCompDirectiveError
 	}

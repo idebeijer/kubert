@@ -1,7 +1,6 @@
 package state
 
 import (
-	"errors"
 	"fmt"
 )
 
@@ -19,92 +18,121 @@ type ContextInfo struct {
 }
 
 func (m *Manager) ContextInfo(context string) (ContextInfo, bool) {
-	m.mutex.Lock()
-	defer m.mutex.Unlock()
+	var info ContextInfo
+	var exists bool
 
-	info, exists := m.state.Contexts[context]
+	m.withMemoryLock(func() error {
+		info, exists = m.state.Contexts[context]
+		return nil
+	})
+
 	return info, exists
 }
 
 func (m *Manager) SetContextInfo(context string, info ContextInfo) error {
-	m.state.Contexts[context] = info
-	return m.Save()
+	return m.withLock(func() error {
+		m.state.Contexts[context] = info
+		return m.saveState()
+	})
 }
 
 func (m *Manager) RemoveContext(context string) error {
-	delete(m.state.Contexts, context)
-	return m.Save()
+	return m.withLock(func() error {
+		delete(m.state.Contexts, context)
+		return m.saveState()
+	})
 }
 
 func (m *Manager) SetLastNamespace(context, namespace string) error {
-	info, exists := m.state.Contexts[context]
-	if !exists {
-		return &ContextNotFoundError{Context: context}
-	}
-	info.LastNamespace = namespace
-	m.state.Contexts[context] = info
-	return m.Save()
+	return m.withLock(func() error {
+		info, exists := m.state.Contexts[context]
+		if !exists {
+			return &ContextNotFoundError{Context: context}
+		}
+		info.LastNamespace = namespace
+		m.state.Contexts[context] = info
+		return m.saveState()
+	})
 }
 
 func (m *Manager) ListContexts() []string {
-	m.mutex.Lock()
-	defer m.mutex.Unlock()
+	var contexts []string
 
-	contexts := make([]string, 0, len(m.state.Contexts))
-	for context := range m.state.Contexts {
-		contexts = append(contexts, context)
-	}
+	m.withMemoryLock(func() error {
+		contexts = make([]string, 0, len(m.state.Contexts))
+		for context := range m.state.Contexts {
+			contexts = append(contexts, context)
+		}
+		return nil
+	})
+
 	return contexts
 }
 
 func (m *Manager) SetContextProtection(context string, locked bool) error {
-	info, exists := m.state.Contexts[context]
-	if !exists {
-		return &ContextNotFoundError{Context: context}
-	}
-	info.Protected = &locked
-	m.state.Contexts[context] = info
-	return m.Save()
+	return m.withLock(func() error {
+		info, exists := m.state.Contexts[context]
+		if !exists {
+			return &ContextNotFoundError{Context: context}
+		}
+		info.Protected = &locked
+		m.state.Contexts[context] = info
+		return m.saveState()
+	})
 }
 
-// DeleteContextProtection deletes the Protected field by setting it to nil
 func (m *Manager) DeleteContextProtection(context string) error {
-	info, exists := m.state.Contexts[context]
-	if !exists {
-		return &ContextNotFoundError{Context: context}
-	}
-	info.Protected = nil
-	m.state.Contexts[context] = info
-	return m.Save()
+	return m.withLock(func() error {
+		info, exists := m.state.Contexts[context]
+		if !exists {
+			return &ContextNotFoundError{Context: context}
+		}
+		info.Protected = nil
+		m.state.Contexts[context] = info
+		return m.saveState()
+	})
 }
 
 func (m *Manager) IsContextProtected(context string) (bool, error) {
-	info, exists := m.state.Contexts[context]
-	if !exists {
-		return false, &ContextNotFoundError{Context: context}
-	}
-	if info.Protected == nil {
-		return false, nil
-	}
-	return *info.Protected, nil
-}
+	var result bool
+	var err error
 
-func (m *Manager) EnsureContextExists(context string) {
-	if _, exists := m.state.Contexts[context]; !exists {
-		m.state.Contexts[context] = ContextInfo{}
-	}
-}
-
-// SetLastNamespaceWithContextCreation sets the last namespace for the given context. If the context does not exist, it will be created.
-func (m *Manager) SetLastNamespaceWithContextCreation(context, namespace string) error {
-	err := m.SetLastNamespace(context, namespace)
-	if err != nil {
-		var contextNotFoundError *ContextNotFoundError
-		if errors.As(err, &contextNotFoundError) {
-			m.EnsureContextExists(context)
-			return m.SetLastNamespace(context, namespace)
+	m.withMemoryLock(func() error {
+		info, exists := m.state.Contexts[context]
+		if !exists {
+			err = &ContextNotFoundError{Context: context}
+			return nil
 		}
-		return err
-	}
-	return nil
+		if info.Protected == nil {
+			result = false
+		} else {
+			result = *info.Protected
+		}
+		return nil
+	})
+
+	return result, err
+}
+
+func (m *Manager) EnsureContextExists(context string) error {
+	return m.withLock(func() error {
+		if _, exists := m.state.Contexts[context]; !exists {
+			m.state.Contexts[context] = ContextInfo{}
+			return m.saveState()
+		}
+		return nil
+	})
+}
+
+func (m *Manager) SetLastNamespaceWithContextCreation(context, namespace string) error {
+	return m.withLock(func() error {
+		info, exists := m.state.Contexts[context]
+		if !exists {
+			m.state.Contexts[context] = ContextInfo{LastNamespace: namespace}
+		} else {
+			info.LastNamespace = namespace
+			m.state.Contexts[context] = info
+		}
+		return m.saveState()
+	})
 }

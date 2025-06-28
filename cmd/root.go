@@ -84,7 +84,7 @@ func (c *RootCmd) initConfig() {
 
 	// If a config file is found, read it in.
 	if err := viper.ReadInConfig(); err == nil {
-		//fmt.Fprintln(os.Stderr, "Using config file:", viper.ConfigFileUsed())
+		// fmt.Fprintln(os.Stderr, "Using config file:", viper.ConfigFileUsed())
 	}
 	_ = viper.ReadInConfig()
 	_ = viper.Unmarshal(&config.Cfg)

@@ -20,24 +20,20 @@ func (m *MockProvider) Load() ([]WithPath, error) {
 }
 
 func TestFileSystemProvider_Load(t *testing.T) {
-	// Create a temporary directory for test files.
 	dir, err := os.MkdirTemp("", "kubeconfig")
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer os.RemoveAll(dir)
 
-	// Create a test kubeconfig file.
 	kubeconfigPath := filepath.Join(dir, "config")
 	kubeconfig := &api.Config{}
 	if err := clientcmd.WriteToFile(*kubeconfig, kubeconfigPath); err != nil {
 		t.Fatal(err)
 	}
 
-	// Use include pattern glob
 	includePatterns := []string{fmt.Sprintf("%s/*", dir)}
 
-	// Create a FileSystemProvider and call Load.
 	provider := NewFileSystemProvider(includePatterns, nil)
 	kubeconfigs, err := provider.Load()
 	if err != nil {
@@ -51,12 +47,10 @@ func TestFileSystemProvider_Load(t *testing.T) {
 }
 
 func TestLoader_LoadAll(t *testing.T) {
-	// Create a mock provider that returns a known set of kubeconfig files.
 	kubeconfig := &api.Config{}
 	mockProvider := &MockProvider{kubeconfigs: []WithPath{{Config: kubeconfig, FilePath: "config"}}}
 
-	// Create a Loader with the mock provider and call LoadAll.
-	loader := NewLoader(mockProvider)
+	loader := NewLoader(WithProvider(mockProvider))
 	kubeconfigs, err := loader.LoadAll()
 	if err != nil {
 		t.Fatal(err)
@@ -81,24 +75,20 @@ func TestFileSystemProvider_Load_NoFilesMatchIncludePatterns(t *testing.T) {
 }
 
 func TestFileSystemProvider_Load_AllFilesMatchExcludePatterns(t *testing.T) {
-	// Create a temporary directory for test files.
 	dir, err := os.MkdirTemp("", "kubeconfig")
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer os.RemoveAll(dir)
 
-	// Create a test kubeconfig file.
 	kubeconfigPath := filepath.Join(dir, "config")
 	kubeconfig := &api.Config{}
 	if err := clientcmd.WriteToFile(*kubeconfig, kubeconfigPath); err != nil {
 		t.Fatal(err)
 	}
 
-	// Use exclude pattern glob
 	excludePatterns := []string{fmt.Sprintf("%s/*", dir)}
 
-	// Create a FileSystemProvider and call Load.
 	provider := NewFileSystemProvider([]string{fmt.Sprintf("%s/*", dir)}, excludePatterns)
 	kubeconfigs, err := provider.Load()
 	if err != nil {
