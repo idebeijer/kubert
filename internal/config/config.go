@@ -10,14 +10,29 @@ import (
 var Cfg Config
 
 type Config struct {
-	KubeconfigPaths      KubeconfigPaths `mapstructure:"kubeconfigs" yaml:"kubeconfigs"`
-	InteractiveShellMode bool            `mapstructure:"interactiveShellMode" yaml:"interactiveShellMode"`
-	Contexts             Contexts        `mapstructure:"contexts" yaml:"contexts"`
+	KubeconfigPaths      KubeconfigPaths     `mapstructure:"kubeconfigs" yaml:"kubeconfigs"`
+	KubeconfigProviders  KubeconfigProviders `mapstructure:"providers" yaml:"providers"`
+	InteractiveShellMode bool                `mapstructure:"interactiveShellMode" yaml:"interactiveShellMode"`
+	Contexts             Contexts            `mapstructure:"contexts" yaml:"contexts"`
 }
 
 type KubeconfigPaths struct {
 	Include []string `mapstructure:"include" yaml:"include"`
 	Exclude []string `mapstructure:"exclude" yaml:"exclude"`
+}
+
+type KubeconfigProviders struct {
+	Filesystem     FilesystemProvider     `mapstructure:"filesystem" yaml:"filesystem"`
+	MacOSEncrypted MacOSEncryptedProvider `mapstructure:"macosEncrypted" yaml:"macosEncrypted"`
+}
+
+type FilesystemProvider struct {
+	Enabled bool `mapstructure:"enabled" yaml:"enabled"`
+}
+
+type MacOSEncryptedProvider struct {
+	Enabled    bool   `mapstructure:"enabled" yaml:"enabled"`
+	StorageDir string `mapstructure:"storageDir" yaml:"storageDir"`
 }
 
 type KubeconfigProvider struct {
@@ -44,6 +59,9 @@ func init() {
 		"~/.kube/config",
 	})
 	viper.SetDefault("kubeconfigs.exclude", []string{})
+	viper.SetDefault("providers.filesystem.enabled", true)
+	viper.SetDefault("providers.macosEncrypted.enabled", false)
+	viper.SetDefault("providers.macosEncrypted.storageDir", "~/.kubert/encrypted")
 	viper.SetDefault("interactiveShellMode", true)
 	viper.SetDefault("contexts.protectedByDefaultRegexp", nil)
 	viper.SetDefault("contexts.protectedKubectlCommands", []string{

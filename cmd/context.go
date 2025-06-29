@@ -5,7 +5,9 @@ import (
 	"log/slog"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"sort"
+	"strings"
 
 	"github.com/idebeijer/kubert/internal/config"
 	"github.com/idebeijer/kubert/internal/fzf"
@@ -16,6 +18,17 @@ import (
 	"k8s.io/client-go/tools/clientcmd"
 	"k8s.io/client-go/tools/clientcmd/api"
 )
+
+func expandPath(path string) (string, error) {
+	if strings.HasPrefix(path, "~") {
+		home, err := os.UserHomeDir()
+		if err != nil {
+			return "", fmt.Errorf("failed to get home directory for path %s: %w", path, err)
+		}
+		return filepath.Join(home, path[2:]), nil
+	}
+	return path, nil
+}
 
 func NewContextCommand() *cobra.Command {
 	cmd := &cobra.Command{}
@@ -31,10 +44,32 @@ Kubert will issue a temporary kubeconfig file with the selected context, so that
 		RunE: func(cmd *cobra.Command, args []string) error {
 			cfg := config.Cfg
 
-			fsProvider := kubeconfig.NewFileSystemProvider(cfg.KubeconfigPaths.Include, cfg.KubeconfigPaths.Exclude)
-			loader := kubeconfig.NewLoader(
-				kubeconfig.WithProvider(fsProvider),
-			)
+			loader := kubeconfig.NewLoader()
+
+			// Add filesystem provider if enabled
+			if cfg.KubeconfigProviders.Filesystem.Enabled {
+				fsProvider := kubeconfig.NewFileSystemProvider(cfg.KubeconfigPaths.Include, cfg.KubeconfigPaths.Exclude)
+				loader = kubeconfig.NewLoader(kubeconfig.WithProvider(fsProvider))
+			}
+
+			// Add macOS encrypted provider if enabled
+			if cfg.KubeconfigProviders.MacOSEncrypted.Enabled {
+				expandedStorageDir, err := expandPath(cfg.KubeconfigProviders.MacOSEncrypted.StorageDir)
+				if err != nil {
+					return fmt.Errorf("failed to expand storage directory path: %w", err)
+				}
+
+				encryptedProvider, err := kubeconfig.NewMacOSEncryptedProvider(expandedStorageDir)
+				if err != nil {
+					return fmt.Errorf("failed to create encrypted provider: %w", err)
+				}
+
+				if loader.Providers == nil {
+					loader = kubeconfig.NewLoader(kubeconfig.WithProvider(encryptedProvider))
+				} else {
+					loader.Providers = append(loader.Providers, encryptedProvider)
+				}
+			}
 
 			sm, err := state.NewManager()
 			if err != nil {
@@ -62,10 +97,21 @@ Kubert will issue a temporary kubeconfig file with the selected context, so that
 			if !found {
 				return fmt.Errorf("context %s not found", selectedContextName)
 			}
-
 			// Find the context in the state to get the last namespace used, so it can be set in the new kubeconfig
 			contextInState, _ := sm.ContextInfo(selectedContextName)
-			tempKubeconfig, cleanup, err := createTempKubeconfigFile(selectedContext.FilePath, selectedContextName, contextInState.LastNamespace)
+
+			// Check if this is an encrypted context by checking if the file path is encrypted
+			var tempKubeconfig *os.File
+			var cleanup func()
+
+			if isEncryptedContext(selectedContext.FilePath) {
+				// For encrypted contexts, create temp file from the already loaded config
+				tempKubeconfig, cleanup, err = createTempKubeconfigFromConfig(selectedContext.Config, selectedContextName, contextInState.LastNamespace)
+			} else {
+				// For regular contexts, use the file path
+				tempKubeconfig, cleanup, err = createTempKubeconfigFile(selectedContext.FilePath, selectedContextName, contextInState.LastNamespace)
+			}
+
 			if err != nil {
 				return err
 			}
@@ -165,6 +211,57 @@ func createTempKubeconfigFile(kubeconfigPath, selectedContextName, namespace str
 	return tempKubeconfig, cleanup, nil
 }
 
+// isEncryptedContext checks if a file path represents an encrypted kubeconfig
+func isEncryptedContext(filePath string) bool {
+	return strings.HasSuffix(filePath, ".encrypted")
+}
+
+// createTempKubeconfigFromConfig creates a temporary kubeconfig file from an in-memory config
+func createTempKubeconfigFromConfig(cfg *api.Config, selectedContextName, namespace string) (*os.File, func(), error) {
+	selectedContext := cfg.Contexts[selectedContextName]
+	if selectedContext == nil {
+		return nil, nil, fmt.Errorf("context %s not found in kubeconfig", selectedContextName)
+	}
+	selectedCluster := cfg.Clusters[selectedContext.Cluster]
+	if selectedCluster == nil {
+		return nil, nil, fmt.Errorf("cluster %s not found in kubeconfig", selectedContext.Cluster)
+	}
+	selectedAuthInfo := cfg.AuthInfos[selectedContext.AuthInfo]
+	if selectedAuthInfo == nil {
+		return nil, nil, fmt.Errorf("auth info %s not found in kubeconfig", selectedContext.AuthInfo)
+	}
+
+	// Build a new kubeconfig with only the selected context
+	newConfig := api.NewConfig()
+	newConfig.Contexts[selectedContextName] = selectedContext
+	newConfig.Clusters[selectedContext.Cluster] = selectedCluster
+	newConfig.AuthInfos[selectedContext.AuthInfo] = selectedAuthInfo
+	newConfig.CurrentContext = selectedContextName
+	if namespace != "" {
+		newConfig.Contexts[selectedContextName].Namespace = namespace
+	}
+
+	tempKubeconfig, err := os.CreateTemp("", "kubert-*.yaml")
+	if err != nil {
+		return nil, nil, err
+	}
+	err = os.Chmod(tempKubeconfig.Name(), 0o600)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	if err := clientcmd.WriteToFile(*newConfig, tempKubeconfig.Name()); err != nil {
+		return nil, nil, fmt.Errorf("failed to write kubeconfig: %w", err)
+	}
+
+	cleanup := func() {
+		_ = tempKubeconfig.Close()
+		_ = os.Remove(tempKubeconfig.Name())
+	}
+
+	return tempKubeconfig, cleanup, nil
+}
+
 func launchShellWithKubeconfig(kubeconfigPath, originalKubeconfigPath string) error {
 	// Set the KUBECONFIG environment variable to the path of the temporary kubeconfig file
 	if err := os.Setenv("KUBECONFIG", kubeconfigPath); err != nil {
@@ -209,8 +306,33 @@ func launchShellWithKubeconfig(kubeconfigPath, originalKubeconfigPath string) er
 
 func validContextArgsFunction(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
 	cfg := config.Cfg
-	fsProvider := kubeconfig.NewFileSystemProvider(cfg.KubeconfigPaths.Include, cfg.KubeconfigPaths.Exclude)
-	loader := kubeconfig.NewLoader(kubeconfig.WithProvider(fsProvider))
+
+	loader := kubeconfig.NewLoader()
+
+	// Add filesystem provider if enabled
+	if cfg.KubeconfigProviders.Filesystem.Enabled {
+		fsProvider := kubeconfig.NewFileSystemProvider(cfg.KubeconfigPaths.Include, cfg.KubeconfigPaths.Exclude)
+		loader = kubeconfig.NewLoader(kubeconfig.WithProvider(fsProvider))
+	}
+
+	// Add macOS encrypted provider if enabled
+	if cfg.KubeconfigProviders.MacOSEncrypted.Enabled {
+		expandedStorageDir, err := expandPath(cfg.KubeconfigProviders.MacOSEncrypted.StorageDir)
+		if err != nil {
+			return nil, cobra.ShellCompDirectiveError
+		}
+
+		encryptedProvider, err := kubeconfig.NewMacOSEncryptedProvider(expandedStorageDir)
+		if err != nil {
+			return nil, cobra.ShellCompDirectiveError
+		}
+
+		if loader.Providers == nil {
+			loader = kubeconfig.NewLoader(kubeconfig.WithProvider(encryptedProvider))
+		} else {
+			loader.Providers = append(loader.Providers, encryptedProvider)
+		}
+	}
 
 	contexts, err := loader.LoadContexts()
 	if err != nil {

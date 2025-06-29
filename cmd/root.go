@@ -60,6 +60,7 @@ func (c *RootCmd) addCommands() {
 	c.AddCommand(NewContextCommand())
 	c.AddCommand(NewNamespaceCommand())
 	c.AddCommand(NewKubectlCommand())
+	c.AddCommand(NewEncryptedCommand())
 }
 
 func (c *RootCmd) initConfig() {
