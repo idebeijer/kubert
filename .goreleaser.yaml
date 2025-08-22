@@ -34,8 +34,6 @@ homebrew_casks:
       bash: completions/kubert.bash
       zsh: completions/kubert.zsh
       fish: completions/kubert.fish
-    conflicts:
-      - formula: kubert
     hooks:
       post:
         install: |
