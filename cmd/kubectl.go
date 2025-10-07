@@ -149,7 +149,7 @@ func isContextProtected(sm *state.Manager, context string, cfg config.Config) (b
 		}
 	}
 
-	if contextInfo.Protected != nil && *contextInfo.Protected == true {
+	if contextInfo.Protected != nil && *contextInfo.Protected {
 		return true, nil
 	}
 

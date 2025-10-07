@@ -5,12 +5,13 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/idebeijer/kubert/cmd/contextprotection"
-	"github.com/idebeijer/kubert/cmd/kubeconfig"
-	"github.com/idebeijer/kubert/internal/config"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 	_ "k8s.io/client-go/plugin/pkg/client/auth"
+
+	"github.com/idebeijer/kubert/cmd/contextprotection"
+	"github.com/idebeijer/kubert/cmd/kubeconfig"
+	"github.com/idebeijer/kubert/internal/config"
 )
 
 type RootCmd struct {
@@ -60,6 +61,7 @@ func (c *RootCmd) addCommands() {
 	c.AddCommand(NewContextCommand())
 	c.AddCommand(NewNamespaceCommand())
 	c.AddCommand(NewKubectlCommand())
+	c.AddCommand(NewExecCommand())
 }
 
 func (c *RootCmd) initConfig() {
