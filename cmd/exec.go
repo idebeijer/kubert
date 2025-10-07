@@ -310,11 +310,10 @@ func printResult(result contextExecResult) {
 }
 
 func showDryRun(contexts []kubeconfig.Context, args []string, namespace string, sm *state.Manager, cfg config.Config) error {
-	cyan := color.New(color.FgCyan, color.Bold).SprintFunc()
 	yellow := color.New(color.FgYellow).SprintFunc()
 	green := color.New(color.FgGreen).SprintFunc()
 
-	fmt.Println(cyan("=== DRY RUN ==="))
+	fmt.Println("=== DRY RUN ===")
 	fmt.Println()
 	fmt.Printf("Command: %s\n", strings.Join(args, " "))
 	if namespace != "" {
@@ -323,7 +322,7 @@ func showDryRun(contexts []kubeconfig.Context, args []string, namespace string, 
 	fmt.Printf("Total contexts: %d\n", len(contexts))
 	fmt.Println()
 
-	fmt.Println(cyan("Contexts to execute against:"))
+	fmt.Println("Contexts to execute against:")
 	for _, ctx := range contexts {
 		locked, err := isContextProtected(sm, ctx.Name, cfg)
 		if err != nil {
@@ -344,9 +343,6 @@ func showDryRun(contexts []kubeconfig.Context, args []string, namespace string, 
 
 		fmt.Printf("  %s %s%s\n", status, ctx.Name, statusText)
 	}
-
-	fmt.Println()
-	fmt.Println(cyan("Note:"), "This is a dry run. No commands were executed.")
 
 	return nil
 }
