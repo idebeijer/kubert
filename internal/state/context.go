@@ -136,3 +136,23 @@ func (m *Manager) SetLastNamespaceWithContextCreation(context, namespace string)
 		return m.saveState()
 	})
 }
+
+func (m *Manager) GetLastContext() (string, bool) {
+	var lastContext string
+	var exists bool
+
+	m.withMemoryLock(func() error {
+		lastContext = m.state.LastContext
+		exists = lastContext != ""
+		return nil
+	})
+
+	return lastContext, exists
+}
+
+func (m *Manager) SetLastContext(context string) error {
+	return m.withLock(func() error {
+		m.state.LastContext = context
+		return m.saveState()
+	})
+}

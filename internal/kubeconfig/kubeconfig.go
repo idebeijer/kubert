@@ -169,6 +169,8 @@ func (l *Loader) LoadContexts() ([]Context, error) {
 	}
 
 	var contexts []Context
+	contextSources := make(map[string]string)
+
 	for _, kubeconfig := range allKubeconfigs {
 		if kubeconfig.Config.Contexts == nil {
 			continue
@@ -177,6 +179,16 @@ func (l *Loader) LoadContexts() ([]Context, error) {
 			if contextName == "" {
 				continue
 			}
+
+			if existingSource, exists := contextSources[contextName]; exists {
+				return nil, fmt.Errorf(
+					"duplicate context name %q found:\n  - %s\n  - %s\n\n"+
+						"Kubert requires unique context names across all kubeconfig files.\n"+
+						"Please rename one of these contexts to avoid conflicts",
+					contextName, existingSource, kubeconfig.FilePath)
+			}
+
+			contextSources[contextName] = kubeconfig.FilePath
 			contexts = append(contexts, Context{
 				Name:     contextName,
 				WithPath: kubeconfig,

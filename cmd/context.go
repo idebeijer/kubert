@@ -20,10 +20,20 @@ import (
 
 func NewContextCommand() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "ctx",
+		Use:   "ctx [context-name | -]",
 		Short: "Spawn a shell with the selected context",
 		Long: `Start a shell with the KUBECONFIG environment variable set to the selected context.
-Kubert will issue a temporary kubeconfig file with the selected context, so that multiple shells can be spawned with different contexts.`,
+Kubert will issue a temporary kubeconfig file with the selected context, so that multiple shells can be spawned with different contexts.
+
+Use '-' to switch to the previously selected context.`,
+		Example: `  # Select a context interactively
+  kubert ctx
+
+  # Switch to a specific context
+  kubert ctx my-cluster
+
+  # Switch to the previously selected context
+  kubert ctx -`,
 		Aliases:           []string{"context"},
 		SilenceUsage:      true,
 		ValidArgsFunction: validContextArgsFunction,
@@ -49,7 +59,7 @@ Kubert will issue a temporary kubeconfig file with the selected context, so that
 			contextNames := getContextNames(contexts)
 			sort.Strings(contextNames)
 
-			selectedContextName, err := selectContextName(args, contextNames)
+			selectedContextName, err := selectContextName(args, contextNames, sm)
 			if err != nil {
 				return err
 			}
@@ -62,7 +72,6 @@ Kubert will issue a temporary kubeconfig file with the selected context, so that
 				return fmt.Errorf("context %s not found", selectedContextName)
 			}
 
-			// Find the context in the state to get the last namespace used, so it can be set in the new kubeconfig
 			contextInState, _ := sm.ContextInfo(selectedContextName)
 			tempKubeconfig, cleanup, err := createTempKubeconfigFile(selectedContext.FilePath, selectedContextName, contextInState.LastNamespace)
 			if err != nil {
@@ -71,6 +80,10 @@ Kubert will issue a temporary kubeconfig file with the selected context, so that
 			defer cleanup()
 
 			slog.Debug("Created a new kubeconfig with the specified context", "tempKubeconfig", tempKubeconfig.Name())
+
+			if err := sm.SetLastContext(selectedContextName); err != nil {
+				slog.Warn("Failed to save last context", "error", err)
+			}
 
 			return launchShellWithKubeconfig(tempKubeconfig.Name(), selectedContext.FilePath)
 		},
@@ -87,8 +100,15 @@ func getContextNames(contexts []kubeconfig.Context) []string {
 	return names
 }
 
-func selectContextName(args []string, contextNames []string) (string, error) {
+func selectContextName(args []string, contextNames []string, sm *state.Manager) (string, error) {
 	if len(args) > 0 {
+		if args[0] == "-" {
+			lastContext, exists := sm.GetLastContext()
+			if !exists {
+				return "", fmt.Errorf("no previous context found")
+			}
+			return lastContext, nil
+		}
 		return args[0], nil
 	}
 	if !fzf.IsInteractiveShell() {
