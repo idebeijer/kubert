@@ -11,7 +11,7 @@ Kubeconfig command
 ### Options inherited from parent commands
 
 ```
-      --config string   config file (default is $HOME/.kubert/config.yaml)
+      --config string   config file (default is $HOME/.config/kubert/config.yaml)
       --debug           debug mode
 ```
 
