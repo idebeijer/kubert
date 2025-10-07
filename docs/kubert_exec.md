@@ -12,7 +12,13 @@ By default, uses glob-style wildcards (* and ?). Use --regex for regex patterns.
 If --contexts is not provided and running in an interactive shell with fzf,
 you can select multiple contexts interactively (use Tab/Shift-Tab to select).
 
-Examples:
+```
+kubert exec [flags] -- command [args...]
+```
+
+### Examples
+
+```
   # Run kubectl get pods in all production contexts
   kubert exec --contexts "prod*" -- kubectl get pods
 
@@ -30,9 +36,6 @@ Examples:
   
   # Dry run to see which contexts will be used
   kubert exec --contexts "prod*" --dry-run -- kubectl get pods
-
-```
-kubert exec [flags] -- command [args...]
 ```
 
 ### Options

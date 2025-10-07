@@ -44,10 +44,8 @@ The command will run against all contexts matching the provided pattern.
 By default, uses glob-style wildcards (* and ?). Use --regex for regex patterns.
 
 If --contexts is not provided and running in an interactive shell with fzf,
-you can select multiple contexts interactively (use Tab/Shift-Tab to select).
-
-Examples:
-  # Run kubectl get pods in all production contexts
+you can select multiple contexts interactively (use Tab/Shift-Tab to select).`,
+		Example: `  # Run kubectl get pods in all production contexts
   kubert exec --contexts "prod*" -- kubectl get pods
 
   # Use regex to match specific patterns
