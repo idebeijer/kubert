@@ -7,20 +7,19 @@ import (
 	"os/exec"
 	"sort"
 
+	"github.com/spf13/cobra"
+	"k8s.io/client-go/tools/clientcmd"
+	"k8s.io/client-go/tools/clientcmd/api"
+
 	"github.com/idebeijer/kubert/internal/config"
 	"github.com/idebeijer/kubert/internal/fzf"
 	"github.com/idebeijer/kubert/internal/kubeconfig"
 	"github.com/idebeijer/kubert/internal/kubert"
 	"github.com/idebeijer/kubert/internal/state"
-	"github.com/spf13/cobra"
-	"k8s.io/client-go/tools/clientcmd"
-	"k8s.io/client-go/tools/clientcmd/api"
 )
 
 func NewContextCommand() *cobra.Command {
-	cmd := &cobra.Command{}
-
-	cmd = &cobra.Command{
+	cmd := &cobra.Command{
 		Use:   "ctx",
 		Short: "Spawn a shell with the selected context",
 		Long: `Start a shell with the KUBECONFIG environment variable set to the selected context.

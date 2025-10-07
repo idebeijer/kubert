@@ -3,9 +3,7 @@ package contextprotection
 import "github.com/spf13/cobra"
 
 func NewCommand() *cobra.Command {
-	cmd := &cobra.Command{}
-
-	cmd = &cobra.Command{
+	cmd := &cobra.Command{
 		Use:   "context-protection",
 		Short: "Protect and unprotect contexts",
 		Long: `Protect and unprotect contexts.

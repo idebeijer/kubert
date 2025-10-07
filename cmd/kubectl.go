@@ -8,17 +8,16 @@ import (
 	"strings"
 
 	"github.com/fatih/color"
+	"github.com/spf13/cobra"
+
 	"github.com/idebeijer/kubert/internal/config"
 	"github.com/idebeijer/kubert/internal/kubert"
 	"github.com/idebeijer/kubert/internal/state"
 	"github.com/idebeijer/kubert/internal/util"
-	"github.com/spf13/cobra"
 )
 
 func NewKubectlCommand() *cobra.Command {
-	cmd := &cobra.Command{}
-
-	cmd = &cobra.Command{
+	cmd := &cobra.Command{
 		Use:                "kubectl",
 		Short:              "Wrapper for kubectl",
 		Long:               `Wrapper for kubectl, to support context protection with "kubert context-protection".`,

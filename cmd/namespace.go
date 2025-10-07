@@ -5,19 +5,18 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/idebeijer/kubert/internal/fzf"
-	"github.com/idebeijer/kubert/internal/kubert"
-	"github.com/idebeijer/kubert/internal/state"
 	"github.com/spf13/cobra"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/clientcmd"
+
+	"github.com/idebeijer/kubert/internal/fzf"
+	"github.com/idebeijer/kubert/internal/kubert"
+	"github.com/idebeijer/kubert/internal/state"
 )
 
 func NewNamespaceCommand() *cobra.Command {
-	cmd := &cobra.Command{}
-
-	cmd = &cobra.Command{
+	cmd := &cobra.Command{
 		Use:     "ns",
 		Short:   "Switch to a different namespace",
 		Long:    `Switch to a different namespace in the current Kubert shell. Other shells with the same context will not be affected.`,
