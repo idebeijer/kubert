@@ -57,11 +57,11 @@ func protectionStatus(sm *state.Manager, context string, cfg config.Config) erro
 		}
 	}
 
-	if contextInfo.Protected != nil && *contextInfo.Protected == true {
+	if contextInfo.Protected != nil && *contextInfo.Protected {
 		fmt.Println("Current context is protected: explicit protect setting set")
 	}
 
-	if contextInfo.Protected != nil && *contextInfo.Protected == false {
+	if contextInfo.Protected != nil && !*contextInfo.Protected {
 		fmt.Println("Current context is unprotected: explicit unprotect setting set")
 	}
 
