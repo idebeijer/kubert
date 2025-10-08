@@ -157,7 +157,7 @@ you can select multiple contexts interactively (use Tab/Shift-Tab to select).`,
 		},
 	}
 
-	cmd.Flags().StringVarP(&flags.namespace, "namespace", "n", "", "Namespace to use for all contexts")
+	cmd.Flags().StringVarP(&flags.namespace, "namespace", "n", "default", "Namespace to use for all contexts")
 	cmd.Flags().BoolVar(&flags.regex, "regex", false, "Use regex pattern matching instead of glob-style wildcards")
 	cmd.Flags().BoolVarP(&flags.parallel, "parallel", "p", false, "Execute commands in parallel across all contexts")
 	cmd.Flags().BoolVar(&flags.dryRun, "dry-run", false, "Show which contexts would be used without executing the command")
