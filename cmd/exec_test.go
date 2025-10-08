@@ -151,6 +151,97 @@ func TestFilterContextsByPattern(t *testing.T) {
 	}
 }
 
+func TestFilterContextsByPatterns(t *testing.T) {
+	contexts := []kubeconfig.Context{
+		{Name: "prod-east", WithPath: kubeconfig.WithPath{FilePath: "/tmp/config1"}},
+		{Name: "prod-west", WithPath: kubeconfig.WithPath{FilePath: "/tmp/config1"}},
+		{Name: "staging-east", WithPath: kubeconfig.WithPath{FilePath: "/tmp/config2"}},
+		{Name: "staging-west", WithPath: kubeconfig.WithPath{FilePath: "/tmp/config2"}},
+		{Name: "dev-local", WithPath: kubeconfig.WithPath{FilePath: "/tmp/config3"}},
+		{Name: "test-cluster", WithPath: kubeconfig.WithPath{FilePath: "/tmp/config4"}},
+	}
+
+	tests := []struct {
+		name          string
+		patterns      []string
+		useRegex      bool
+		expectedCount int
+		expectedNames []string
+	}{
+		{
+			name:          "single pattern",
+			patterns:      []string{"prod*"},
+			useRegex:      false,
+			expectedCount: 2,
+			expectedNames: []string{"prod-east", "prod-west"},
+		},
+		{
+			name:          "multiple patterns",
+			patterns:      []string{"prod*", "staging*"},
+			useRegex:      false,
+			expectedCount: 4,
+			expectedNames: []string{"prod-east", "prod-west", "staging-east", "staging-west"},
+		},
+		{
+			name:          "multiple patterns with overlap",
+			patterns:      []string{"prod*", "*-east"},
+			useRegex:      false,
+			expectedCount: 3,
+			expectedNames: []string{"prod-east", "prod-west", "staging-east"},
+		},
+		{
+			name:          "multiple patterns no duplicates",
+			patterns:      []string{"prod-east", "prod-*"},
+			useRegex:      false,
+			expectedCount: 2,
+			expectedNames: []string{"prod-east", "prod-west"},
+		},
+		{
+			name:          "multiple patterns with regex",
+			patterns:      []string{"^prod-.*", "^test-.*"},
+			useRegex:      true,
+			expectedCount: 3,
+			expectedNames: []string{"prod-east", "prod-west", "test-cluster"},
+		},
+		{
+			name:          "all patterns match nothing",
+			patterns:      []string{"nonexistent*", "alsonothere*"},
+			useRegex:      false,
+			expectedCount: 0,
+			expectedNames: []string{},
+		},
+		{
+			name:          "mix of matching and non-matching patterns",
+			patterns:      []string{"prod*", "nonexistent*", "dev*"},
+			useRegex:      false,
+			expectedCount: 3,
+			expectedNames: []string{"dev-local", "prod-east", "prod-west"},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			matched, err := filterContextsByPatterns(contexts, tt.patterns, tt.useRegex)
+			if err != nil {
+				t.Fatalf("filterContextsByPatterns failed: %v", err)
+			}
+
+			if len(matched) != tt.expectedCount {
+				t.Errorf("expected %d matches, got %d", tt.expectedCount, len(matched))
+			}
+
+			matchedNames := make([]string, len(matched))
+			for i, ctx := range matched {
+				matchedNames[i] = ctx.Name
+			}
+
+			if len(tt.expectedNames) > 0 && !stringSlicesEqual(matchedNames, tt.expectedNames) {
+				t.Errorf("expected names %v, got %v", tt.expectedNames, matchedNames)
+			}
+		})
+	}
+}
+
 func TestExecuteInContextKubeconfigSetup(t *testing.T) {
 	tempDir := t.TempDir()
 
