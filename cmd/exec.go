@@ -19,7 +19,6 @@ import (
 )
 
 type execFlags struct {
-	contexts  string
 	namespace string
 	regex     bool
 	parallel  bool
@@ -36,32 +35,35 @@ func NewExecCommand() *cobra.Command {
 	flags := &execFlags{}
 
 	cmd := &cobra.Command{
-		Use:   "exec [flags] -- command [args...]",
+		Use:   "exec [pattern...] -- command [args...]",
 		Short: "Execute a command against multiple contexts",
-		Long: `Execute a command against multiple Kubernetes contexts matching a pattern.
+		Long: `Execute a command against multiple Kubernetes contexts matching one or more patterns.
 
-The command will run against all contexts matching the provided pattern.
+The command will run against all contexts matching the provided patterns.
 By default, uses glob-style wildcards (* and ?). Use --regex for regex patterns.
 
-If --contexts is not provided and running in an interactive shell with fzf,
+If no patterns are provided and running in an interactive shell with fzf,
 you can select multiple contexts interactively (use Tab/Shift-Tab to select).`,
 		Example: `  # Run kubectl get pods in all production contexts
-  kubert exec --contexts "prod*" -- kubectl get pods
+  kubert exec "prod*" -- kubectl get pods
+
+  # Match multiple patterns
+  kubert exec "prod*" "staging*" -- kubectl get nodes
 
   # Use regex to match specific patterns
-  kubert exec --contexts "^(test|staging).*" --regex -- kubectl get nodes
+  kubert exec --regex "^(test|staging).*" -- kubectl get nodes
 
   # Run in parallel across contexts
-  kubert exec --contexts "staging*" --parallel -- kubectl get deployments
+  kubert exec "staging*" --parallel -- kubectl get deployments
 
   # Specify namespace for all contexts
-  kubert exec --contexts "prod*" --namespace kube-system -- kubectl get pods
+  kubert exec "prod*" --namespace kube-system -- kubectl get pods
   
   # Interactive multi-select (if fzf is available)
   kubert exec -- kubectl get nodes
   
   # Dry run to see which contexts will be used
-  kubert exec --contexts "prod*" --dry-run -- kubectl get pods`,
+  kubert exec "prod*" --dry-run -- kubectl get pods`,
 		SilenceUsage: true,
 		Args:         cobra.MinimumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -74,11 +76,34 @@ you can select multiple contexts interactively (use Tab/Shift-Tab to select).`,
 				return fmt.Errorf("error loading contexts: %w", err)
 			}
 
+			// Use ArgsLenAtDash to find where "--" was in the original command
+			// If ArgsLenAtDash returns -1, there was no "--" separator
+			dashIdx := cmd.ArgsLenAtDash()
+
+			var patterns []string
+			var commandArgs []string
+
+			switch dashIdx {
+			case -1:
+				return fmt.Errorf("missing '--' separator between patterns and command")
+			case 0:
+				patterns = []string{}
+				commandArgs = args
+			default:
+				// Split at the dash index
+				patterns = args[:dashIdx]
+				commandArgs = args[dashIdx:]
+			}
+
+			if len(commandArgs) == 0 {
+				return fmt.Errorf("no command provided after '--'")
+			}
+
 			var matchedContexts []kubeconfig.Context
 
-			if flags.contexts == "" {
+			if len(patterns) == 0 {
 				if !fzf.IsInteractiveShell() {
-					return fmt.Errorf("--contexts flag is required in non-interactive mode")
+					return fmt.Errorf("patterns are required in non-interactive mode")
 				}
 
 				contextNames := getContextNames(contexts)
@@ -100,13 +125,13 @@ you can select multiple contexts interactively (use Tab/Shift-Tab to select).`,
 					}
 				}
 			} else {
-				matchedContexts, err = filterContextsByPattern(contexts, flags.contexts, flags.regex)
+				matchedContexts, err = filterContextsByPatterns(contexts, patterns, flags.regex)
 				if err != nil {
 					return fmt.Errorf("error filtering contexts: %w", err)
 				}
 
 				if len(matchedContexts) == 0 {
-					return fmt.Errorf("no contexts matched the pattern: %s", flags.contexts)
+					return fmt.Errorf("no contexts matched the patterns: %s", strings.Join(patterns, ", "))
 				}
 			}
 
@@ -116,7 +141,7 @@ you can select multiple contexts interactively (use Tab/Shift-Tab to select).`,
 			}
 
 			if flags.dryRun {
-				return showDryRun(matchedContexts, args, flags.namespace, sm, cfg)
+				return showDryRun(matchedContexts, commandArgs, flags.namespace, sm, cfg)
 			}
 
 			fmt.Printf("Executing command against %d context(s):\n", len(matchedContexts))
@@ -126,19 +151,44 @@ you can select multiple contexts interactively (use Tab/Shift-Tab to select).`,
 			fmt.Println()
 
 			if flags.parallel {
-				return executeParallel(matchedContexts, args, flags.namespace, sm, cfg)
+				return executeParallel(matchedContexts, commandArgs, flags.namespace, sm, cfg)
 			}
-			return executeSequential(matchedContexts, args, flags.namespace, sm, cfg)
+			return executeSequential(matchedContexts, commandArgs, flags.namespace, sm, cfg)
 		},
 	}
 
-	cmd.Flags().StringVarP(&flags.contexts, "contexts", "c", "", "Pattern to match context names (omit for interactive multi-select)")
 	cmd.Flags().StringVarP(&flags.namespace, "namespace", "n", "default", "Namespace to use for all contexts")
 	cmd.Flags().BoolVar(&flags.regex, "regex", false, "Use regex pattern matching instead of glob-style wildcards")
 	cmd.Flags().BoolVarP(&flags.parallel, "parallel", "p", false, "Execute commands in parallel across all contexts")
 	cmd.Flags().BoolVar(&flags.dryRun, "dry-run", false, "Show which contexts would be used without executing the command")
 
 	return cmd
+}
+
+func filterContextsByPatterns(contexts []kubeconfig.Context, patterns []string, useRegex bool) ([]kubeconfig.Context, error) {
+	matchedMap := make(map[string]kubeconfig.Context)
+
+	for _, pattern := range patterns {
+		matched, err := filterContextsByPattern(contexts, pattern, useRegex)
+		if err != nil {
+			return nil, err
+		}
+
+		for _, ctx := range matched {
+			matchedMap[ctx.Name] = ctx
+		}
+	}
+
+	var result []kubeconfig.Context
+	for _, ctx := range matchedMap {
+		result = append(result, ctx)
+	}
+
+	sort.Slice(result, func(i, j int) bool {
+		return result[i].Name < result[j].Name
+	})
+
+	return result, nil
 }
 
 func filterContextsByPattern(contexts []kubeconfig.Context, pattern string, useRegex bool) ([]kubeconfig.Context, error) {

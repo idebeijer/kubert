@@ -7,8 +7,23 @@ Spawn a shell with the selected context
 Start a shell with the KUBECONFIG environment variable set to the selected context.
 Kubert will issue a temporary kubeconfig file with the selected context, so that multiple shells can be spawned with different contexts.
 
+Use '-' to switch to the previously selected context.
+
 ```
-kubert ctx [flags]
+kubert ctx [context-name | -] [flags]
+```
+
+### Examples
+
+```
+  # Select a context interactively
+  kubert ctx
+
+  # Switch to a specific context
+  kubert ctx my-cluster
+
+  # Switch to the previously selected context
+  kubert ctx -
 ```
 
 ### Options
