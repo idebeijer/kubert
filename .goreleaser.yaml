@@ -21,10 +21,10 @@ builds:
     ldflags:
       - "-s"
       - "-w"
-      - "-X github.com/idebeijer/kubert/pkg/version.Version={{ .Version }}"
-      - "-X github.com/idebeijer/kubert/pkg/version.Commit={{ .ShortCommit }}"
-      - "-X github.com/idebeijer/kubert/pkg/version.Date={{ .Date }}"
-      - "-X github.com/idebeijer/kubert/pkg/version.BuiltBy=goreleaser"
+      - "-X github.com/idebeijer/kubert/pkg/versions.Version={{ .Version }}"
+      - "-X github.com/idebeijer/kubert/pkg/versions.Commit={{ .ShortCommit }}"
+      - "-X github.com/idebeijer/kubert/pkg/versions.Date={{ .Date }}"
+      - "-X github.com/idebeijer/kubert/pkg/versions.BuiltBy=goreleaser"
 
 archives:
   - id: completions
