@@ -91,3 +91,53 @@ To delete the explicit protection, run:
 ```sh
 kubert context-protection delete
 ```
+
+### Shell hooks
+
+Kubert supports pre and post shell hooks that can be configured to run custom commands before and after spawning a shell with the selected context.
+This is useful for customizing your shell environment based on the selected context.
+
+#### Configuration
+
+You can configure hooks in the Kubert config file (`~/.config/kubert/config.yaml`):
+
+```yaml
+hooks:
+  # Command to run before spawning the shell
+  preShell: 'echo "Entering context: $KUBERT_CONTEXT"'
+
+  # Command to run after exiting the shell
+  postShell: 'echo "Exited context: $KUBERT_CONTEXT"'
+```
+
+#### Examples
+
+**Set terminal tab title to the context name and reset it on exit:**
+
+```yaml
+hooks:
+  preShell: 'echo "\033]0;k8s: $KUBERT_CONTEXT\007"'
+  postShell: 'echo "\033]0;\007"'
+```
+
+**Send a notification when entering/exiting a production context:**
+
+```yaml
+hooks:
+  preShell: |
+    if [[ "$KUBERT_CONTEXT" == *"prod"* ]]; then
+      osascript -e 'display notification "Entering production context!" with title "Kubert"'
+    fi
+  postShell: |
+    if [[ "$KUBERT_CONTEXT" == *"prod"* ]]; then
+      osascript -e 'display notification "Exited production context" with title "Kubert"'
+    fi
+```
+
+**Log context usage:**
+
+```yaml
+hooks:
+  preShell: 'echo "$(date): Entered context $KUBERT_CONTEXT" >> ~/.kubert_usage.log'
+  postShell: 'echo "$(date): Exited context $KUBERT_CONTEXT" >> ~/.kubert_usage.log'
+```

@@ -85,7 +85,7 @@ Use '-' to switch to the previously selected context.`,
 				slog.Warn("Failed to save last context", "error", err)
 			}
 
-			return launchShellWithKubeconfig(tempKubeconfig.Name(), selectedContext.FilePath)
+			return launchShellWithKubeconfig(tempKubeconfig.Name(), selectedContext.FilePath, selectedContextName, cfg)
 		},
 	}
 
@@ -184,7 +184,15 @@ func createTempKubeconfigFile(kubeconfigPath, selectedContextName, namespace str
 	return tempKubeconfig, cleanup, nil
 }
 
-func launchShellWithKubeconfig(kubeconfigPath, originalKubeconfigPath string) error {
+func getUserShell() string {
+	shell := os.Getenv("SHELL")
+	if shell == "" {
+		shell = "/bin/sh" // Default to /bin/sh if SHELL is not set
+	}
+	return shell
+}
+
+func launchShellWithKubeconfig(kubeconfigPath, originalKubeconfigPath, contextName string, cfg config.Config) error {
 	// Set the KUBECONFIG environment variable to the path of the temporary kubeconfig file
 	if err := os.Setenv("KUBECONFIG", kubeconfigPath); err != nil {
 		return fmt.Errorf("failed to set KUBECONFIG environment variable: %w", err)
@@ -198,29 +206,55 @@ func launchShellWithKubeconfig(kubeconfigPath, originalKubeconfigPath string) er
 	if err := os.Setenv(kubert.ShellOriginalKubeconfigEnvVar, originalKubeconfigPath); err != nil {
 		return fmt.Errorf("failed to set KUBERT_SHELL_ORIGINAL_KUBECONFIG environment variable: %w", err)
 	}
+	if err := os.Setenv("KUBERT_CONTEXT", contextName); err != nil {
+		return fmt.Errorf("failed to set KUBERT_CONTEXT environment variable: %w", err)
+	}
 
 	statefile, _ := state.FilePath()
 	if err := os.Setenv(kubert.ShellStateFilePathEnvVar, statefile); err != nil {
 		return fmt.Errorf("failed to set KUBERT_SHELL_STATE_FILE environment variable: %w", err)
 	}
 
-	// Get the user's preferred shell from the SHELL environment variable
-	shell := os.Getenv("SHELL")
-	if shell == "" {
-		shell = "/bin/sh" // Default to /bin/sh if SHELL is not set
+	// Execute pre-shell hook if configured
+	if cfg.Hooks.PreShell != "" {
+		if err := executeHook(cfg.Hooks.PreShell, "pre-shell"); err != nil {
+			slog.Warn("Failed to execute pre-shell hook", "error", err)
+		}
 	}
 
 	// Launch the shell with the current environment, including the modified KUBECONFIG
-	shellCmd := exec.Command(shell)
+	shellCmd := exec.Command(getUserShell())
 	shellCmd.Stdin = os.Stdin
 	shellCmd.Stdout = os.Stdout
 	shellCmd.Stderr = os.Stderr
 
-	if err := shellCmd.Run(); err != nil {
-		if exitErr, ok := err.(*exec.ExitError); ok && exitErr.ExitCode() == 130 {
+	shellErr := shellCmd.Run()
+
+	// Execute post-shell hook if configured (always run, even if shell exited with error)
+	if cfg.Hooks.PostShell != "" {
+		if err := executeHook(cfg.Hooks.PostShell, "post-shell"); err != nil {
+			slog.Warn("Failed to execute post-shell hook", "error", err)
+		}
+	}
+
+	if shellErr != nil {
+		if exitErr, ok := shellErr.(*exec.ExitError); ok && exitErr.ExitCode() == 130 {
 			return nil // Exit code 130 means the user exited the shell with Ctrl+D, so we don't return an error
 		}
-		return fmt.Errorf("failed to launch shell: %w", err)
+		return fmt.Errorf("failed to launch shell: %w", shellErr)
+	}
+
+	return nil
+}
+
+func executeHook(hookCommand, hookType string) error {
+	hookCmd := exec.Command(getUserShell(), "-c", hookCommand)
+	hookCmd.Env = os.Environ()
+	hookCmd.Stdout = os.Stdout
+	hookCmd.Stderr = os.Stderr
+
+	if err := hookCmd.Run(); err != nil {
+		return fmt.Errorf("%s hook failed: %w", hookType, err)
 	}
 
 	return nil
