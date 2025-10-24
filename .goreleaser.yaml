@@ -18,6 +18,13 @@ builds:
     goarch:
       - amd64
       - arm64
+    ldflags:
+      - "-s"
+      - "-w"
+      - "-X github.com/idebeijer/kubert/pkg/version.Version={{ .Version }}"
+      - "-X github.com/idebeijer/kubert/pkg/version.Commit={{ .ShortCommit }}"
+      - "-X github.com/idebeijer/kubert/pkg/version.Date={{ .Date }}"
+      - "-X github.com/idebeijer/kubert/pkg/version.BuiltBy=goreleaser"
 
 archives:
   - id: completions

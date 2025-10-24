@@ -64,6 +64,7 @@ func (c *RootCmd) addCommands() {
 	c.AddCommand(NewKubectlCommand())
 	c.AddCommand(NewExecCommand())
 	c.AddCommand(which.NewCommand())
+	c.AddCommand(NewVersionCommand())
 }
 
 func (c *RootCmd) initConfig() {
