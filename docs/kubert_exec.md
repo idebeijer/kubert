@@ -46,7 +46,7 @@ kubert exec [pattern...] -- command [args...] [flags]
 ```
       --dry-run            Show which contexts would be used without executing the command
   -h, --help               help for exec
-  -n, --namespace string   Namespace to use for all contexts
+  -n, --namespace string   Namespace to use for all contexts (default "default")
   -p, --parallel           Execute commands in parallel across all contexts
       --regex              Use regex pattern matching instead of glob-style wildcards
 ```

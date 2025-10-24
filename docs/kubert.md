@@ -26,4 +26,6 @@ Keep in mind, this will only work when using kubectl through the "kubert kubectl
 * [kubert kubeconfig](kubert_kubeconfig.md)	 - Kubeconfig command
 * [kubert kubectl](kubert_kubectl.md)	 - Wrapper for kubectl
 * [kubert ns](kubert_ns.md)	 - Switch to a different namespace
+* [kubert version](kubert_version.md)	 - Display version and build information
+* [kubert which](kubert_which.md)	 - Display information about current context, namespace, or config
 
