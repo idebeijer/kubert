@@ -13,6 +13,7 @@ type Config struct {
 	KubeconfigPaths      KubeconfigPaths `mapstructure:"kubeconfigs" yaml:"kubeconfigs"`
 	InteractiveShellMode bool            `mapstructure:"interactiveShellMode" yaml:"interactiveShellMode"`
 	Contexts             Contexts        `mapstructure:"contexts" yaml:"contexts"`
+	Hooks                Hooks           `mapstructure:"hooks" yaml:"hooks"`
 }
 
 type KubeconfigPaths struct {
@@ -39,6 +40,14 @@ type Contexts struct {
 	ExitOnProtectedKubectlCmd bool `mapstructure:"exitOnProtectedKubectlCmd" yaml:"exitOnProtectedKubectlCmd"`
 }
 
+type Hooks struct {
+	// PreShell is a shell command that will be executed before spawning the shell with the selected context.
+	PreShell string `mapstructure:"preShell" yaml:"preShell"`
+
+	// PostShell is a shell command that will be executed after exiting the shell with the selected context.
+	PostShell string `mapstructure:"postShell" yaml:"postShell"`
+}
+
 func init() {
 	viper.SetDefault("kubeconfigs.include", []string{
 		"~/.kube/config",
@@ -61,6 +70,8 @@ func init() {
 		"set",
 	})
 	viper.SetDefault("contexts.exitOnProtectedKubectlCmd", false)
+	viper.SetDefault("hooks.preShell", "")
+	viper.SetDefault("hooks.postShell", "")
 }
 
 func GenerateDefaultYAML() (string, error) {
