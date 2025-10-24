@@ -1,4 +1,18 @@
-# kubert
+<div align="center">
+
+  <h1>kubert</h1>
+
+**A kubectx/kubens alternative with isolated shells, context protection and more**
+
+[![License](https://img.shields.io/github/license/idebeijer/kubert)](https://github.com/idebeijer/kubert/blob/main/LICENSE)
+[![Release](https://img.shields.io/github/v/release/idebeijer/kubert)](https://github.com/idebeijer/kubert/releases)
+[![Go Report Card](https://goreportcard.com/badge/github.com/idebeijer/kubert)](https://goreportcard.com/report/github.com/idebeijer/kubert)
+[![CI](https://img.shields.io/github/actions/workflow/status/idebeijer/kubert/build-test.yml?branch=main)](https://github.com/idebeijer/kubert/actions)
+[![Go Version](https://img.shields.io/github/go-mod/go-version/idebeijer/kubert)](https://go.dev/)
+
+</div>
+
+## Overview
 
 A `kubectx`/`kubens` alternative inspired by [kubie](https://github.com/sbstp/kubie).
 `kubert` is a tool that allows you to switch between Kubernetes contexts and namespaces within an isolated shell.
