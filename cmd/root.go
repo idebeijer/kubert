@@ -11,6 +11,7 @@ import (
 
 	"github.com/idebeijer/kubert/cmd/contextprotection"
 	"github.com/idebeijer/kubert/cmd/kubeconfig"
+	"github.com/idebeijer/kubert/cmd/which"
 	"github.com/idebeijer/kubert/internal/config"
 )
 
@@ -62,6 +63,7 @@ func (c *RootCmd) addCommands() {
 	c.AddCommand(NewNamespaceCommand())
 	c.AddCommand(NewKubectlCommand())
 	c.AddCommand(NewExecCommand())
+	c.AddCommand(which.NewCommand())
 }
 
 func (c *RootCmd) initConfig() {
