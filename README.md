@@ -1,11 +1,29 @@
-# kubert
+<div align="center">
 
-A `kubectx`/`kubens` alternative inspired by [kubie](https://github.com/sbstp/kubie).
-`kubert` is a tool that allows you to switch between Kubernetes contexts and namespaces within an isolated shell.
-That way, you can have multiple shells open, each with a different context and namespace.
+  <h1>kubert</h1>
 
-kubert also has a wrapper for `kubectl` (`kubert kubectl`) to enable you to protect contexts to prevent accidentally running
-certain kubectl commands in the wrong context. Checkout the [Protecting contexts](#protecting-contexts) section for more information.
+**A kubectx/kubens alternative with isolated shells, context protection, and more**
+
+[![License](https://img.shields.io/github/license/idebeijer/kubert)](https://github.com/idebeijer/kubert/blob/main/LICENSE)
+[![Release](https://img.shields.io/github/v/release/idebeijer/kubert)](https://github.com/idebeijer/kubert/releases)
+[![Go Report Card](https://goreportcard.com/badge/github.com/idebeijer/kubert)](https://goreportcard.com/report/github.com/idebeijer/kubert)
+[![CI](https://img.shields.io/github/actions/workflow/status/idebeijer/kubert/build-test.yml?branch=main)](https://github.com/idebeijer/kubert/actions)
+[![Go Version](https://img.shields.io/github/go-mod/go-version/idebeijer/kubert)](https://go.dev/)
+
+</div>
+
+## Overview
+
+`kubert` lets you hop between Kubernetes contexts and namespaces inside dedicated subshells. Each shell gets its own kubeconfig copy so you can keep production, staging, and local sessions open side-by-side without collisions. On top of that, kubert offers guard rails (context protection), multi-context execution, and shell hooks to give you a contextual workflow similar to `kubectx`, `kubens`, and [kubie](https://github.com/sbstp/kubie) in one tool.
+
+## Features
+
+- **Context isolation**: spawn shells with temporary kubeconfig files so contexts never bleed into other terminals.
+- **Namespace management**: switch namespaces within an active kubert shell without touching other sessions.
+- **Context protection**: block (or confirm) risky `kubectl` commands in sensitive contexts.
+- **Multi-context fan-out**: run a command across many contexts with glob or regex selection.
+- **Interactive selection**: opt into fuzzy selection with `fzf` or list contexts/namespaces in non-interactive environments.
+- **Shell hooks**: run pre/post shell commands to tweak prompts, set tab titles, or log usage.
 
 ## Installation
 
@@ -15,104 +33,118 @@ certain kubectl commands in the wrong context. Checkout the [Protecting contexts
 brew install idebeijer/tap/kubert --cask
 ```
 
-## Usage
-
-### Switching contexts
-
-To switch to a different context, run:
+### From source
 
 ```sh
-kubert ctx <context-name>
+go install github.com/idebeijer/kubert@latest
 ```
 
-You can also print out a list of available contexts by running, or if `fzf` is installed, you can select a context from a list:
+## Quick Start
+
+> Tip: install [`fzf`](https://github.com/junegunn/fzf) to pick contexts and namespaces interactively. Without it, kubert prints the available options so you can copy/paste.
 
 ```sh
+# Start an isolated shell; choose a context interactively (fzf) or name it directly
 kubert ctx
+kubert ctx my-cluster
+kubert ctx -             # jump back to the previously used context
+
+# Switch namespaces inside the current kubert shell
+kubert ns kube-system
+
+# Wrap kubectl to enforce context protection rules
+kubert kubectl get pods
+
+# Run a command across several contexts (glob, regex, or interactive multi-select)
+kubert exec "prod-*" "staging-?" -- kubectl get nodes
+kubert exec --regex "^(dev|qa)-.*" -- kubectl get pods
+kubert exec --parallel --dry-run "prod-*" -- kubectl rollout status
+
+# Mark the current context as (un)protected explicitly (overrides regex/defaults)
+kubert context-protection protect
+kubert context-protection unprotect
+kubert context-protection delete     # remove explicit override
+
+# Inspect what kubert is using right now
+kubert which ctx
+kubert which ns
+kubert kubeconfig list
 ```
 
-### Switching namespaces
+## Command Reference
 
-To switch to a different namespace, run:
+| Command                                  | Purpose                                             | Highlights                                                                        |
+| ---------------------------------------- | --------------------------------------------------- | --------------------------------------------------------------------------------- |
+| `kubert ctx [<context>\|-]`              | Launch a shell pinned to a context                  | Supports interactive selection, remembers the previous context with `-`           |
+| `kubert ns [<namespace>]`                | Switch namespace inside the current kubert shell    | Lists namespaces when `fzf` is unavailable                                        |
+| `kubert exec [pattern...] -- <command>`  | Execute one command across multiple contexts        | Supports glob (`*`, `?`), `--regex`, `--parallel`, `--namespace`, and `--dry-run` |
+| `kubert kubectl <args...>`               | Run `kubectl` with protection checks                | Blocks/asks confirmation for commands marked as protected                         |
+| `kubert context-protection <subcommand>` | Manage protection status                            | `protect`, `unprotect`, `delete`, and `info` operate on the active context        |
+| `kubert which <ctx\|ns\|config>`         | Print the active context, namespace, or config path | Handy for scripts/prompts                                                         |
+| `kubert kubeconfig list`                 | List kubeconfig files kubert will scan              | Respects include/exclude settings                                                 |
 
-```sh
-kubert ns <namespace-name>
-```
+## Context Protection
 
-You can also print out a list of available namespaces by running, or if `fzf` is installed, you can select a namespace from a list:
+> [!WARNING]  
+> Context protection works only when you run `kubectl` through `kubert kubectl`. It does not modify your existing `kubectl` binary or configuration.
+> You might want to alias it for convenience, e.g., `alias k=kubert kubectl`.
 
-```sh
-kubert ns
-```
+Context protection ensures destructive commands can’t hit sensitive clusters by accident. Protection is only enforced when you run `kubectl` through `kubert kubectl` (consider aliasing `k=kubert kubectl`).
 
-### Protecting contexts
+### Pattern-based defaults
 
-Kubert can be configured to protect certain contexts, to prevent you from accidentally running certain kubectl commands in the wrong context.
-This will only work when using kubectl through the `kubert kubectl` command, it will **not** work when using `kubectl` directly.
-
-To protect a context, you can either set a regex pattern in the Kubert config file, or you can explicitly protect a context.
-When a context is protected, you will be prompted to confirm that you want to run a protected kubectl command in that context.
-
-#### Context protection using a regex pattern
-
-To protect a context using a regex pattern, you need to set the `protectedByDefaultRegexp` in the Kubert config file.
-The following example will protect all contexts that contain `prd` or `prod` in their name:
+Add a regular expression to your config to protect any context whose name matches:
 
 ```yaml
 contexts:
   protectedByDefaultRegexp: "(prd|prod)"
+  protectedKubectlCommands:
+    - delete
+    - apply
+    - scale
 ```
 
-By default, kubert has set this setting to `null`, which means that no contexts are protected by default.
-If you provide an empty string as pattern `""`, all contexts will be protected by default.
+- Omit or set the value to `null` to disable automatic protection.
+- Use an empty string (`""`) to protect every context by default.
 
-The default regex pattern will be ignored for contexts that have an explicit protection set.
+### Explicit overrides
 
-#### Setting an explicit protect/unprotect
-
-Instead of using a regex pattern, you can also explicitly protect the current context.
-When using an explicit protect or unprotect, Kubert will save this in a state file, and the default regex pattern will be ignored for this context.
-
-To tell Kubert to protect the current context, run:
+Use the CLI when you want to mark a specific context as protected or unprotected regardless of the regex:
 
 ```sh
-kubert context-protection protect
+kubert context-protection protect   # enforce protection
+kubert context-protection unprotect # lift protection
+kubert context-protection delete    # remove explicit override and fall back to regex/default
+kubert context-protection info      # show the current protection status
 ```
 
-To tell Kubert to explicitly unprotect the current context, run:
+When a protected context sees a protected command, kubert will either exit immediately (`contexts.exitOnProtectedKubectlCmd: true`) or prompt for confirmation.
 
-```sh
-kubert context-protection unprotect
-```
+## Configuration
 
-The above commands will set an explicit protection for the current context. This means that the context will be (un)protected even if it matches the regex pattern or not.
-To delete the explicit protection, run:
-
-```sh
-kubert context-protection delete
-```
-
-### Shell hooks
-
-Kubert supports pre and post shell hooks that can be configured to run custom commands before and after spawning a shell with the selected context.
-This is useful for customizing your shell environment based on the selected context.
-
-#### Configuration
-
-You can configure hooks in the Kubert config file (`~/.config/kubert/config.yaml`):
+kubert reads from `~/.config/kubert/config.yaml` (override with `kubert --config <path>`). A minimal example:
 
 ```yaml
+contexts:
+  protectedByDefaultRegexp: "(prod|prd)"
+  protectedKubectlCommands:
+    - delete
+    - apply
+  exitOnProtectedKubectlCmd: false
+kubeconfigPaths:
+  include: [] # add extra kubeconfig paths if needed
+  exclude: [] # paths to ignore
 hooks:
-  # Command to run before spawning the shell
-  preShell: 'echo "Entering context: $KUBERT_CONTEXT"'
-
-  # Command to run after exiting the shell
-  postShell: 'echo "Exited context: $KUBERT_CONTEXT"'
+  preShell: 'echo "Entering $KUBERT_CONTEXT ($KUBERT_NAMESPACE)"'
+  postShell: 'echo "Exited $KUBERT_CONTEXT"'
 ```
 
-#### Examples
+- Environment variables can override any setting (`KUBERT_CONTEXTS_PROTECTEDBYDEFAULTREGEXP`, etc.).
+- Run `kubert kubeconfig list` to confirm which kubeconfig files kubert will process.
 
-**Set terminal tab title to the context name and reset it on exit:**
+### Shell Hooks
+
+Hooks let you run shell commands before and after kubert spawns the subshell. They execute in the parent shell, so you can adjust prompts, send notifications, or log actions.
 
 ```yaml
 hooks:
@@ -120,24 +152,21 @@ hooks:
   postShell: 'echo "\033]0;\007"'
 ```
 
-**Send a notification when entering/exiting a production context:**
+Additional ideas:
 
-```yaml
-hooks:
+- Notify on prod access:
+  ```yaml
   preShell: |
     if [[ "$KUBERT_CONTEXT" == *"prod"* ]]; then
-      osascript -e 'display notification "Entering production context!" with title "Kubert"'
+      osascript -e 'display notification "Entering production context" with title "kubert"'
     fi
   postShell: |
     if [[ "$KUBERT_CONTEXT" == *"prod"* ]]; then
-      osascript -e 'display notification "Exited production context" with title "Kubert"'
+      osascript -e 'display notification "Exited production context" with title "kubert"'
     fi
-```
-
-**Log context usage:**
-
-```yaml
-hooks:
-  preShell: 'echo "$(date): Entered context $KUBERT_CONTEXT" >> ~/.kubert_usage.log'
-  postShell: 'echo "$(date): Exited context $KUBERT_CONTEXT" >> ~/.kubert_usage.log'
-```
+  ```
+- Log usage:
+  ```yaml
+  preShell: 'echo "$(date): Entered $KUBERT_CONTEXT" >> ~/.kubert_usage.log'
+  postShell: 'echo "$(date): Exited $KUBERT_CONTEXT" >> ~/.kubert_usage.log'
+  ```
