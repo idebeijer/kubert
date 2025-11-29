@@ -131,8 +131,9 @@ contexts:
     - delete
     - apply
   exitOnProtectedKubectlCmd: false
-kubeconfigPaths:
-  include: [] # add extra kubeconfig paths if needed
+kubeconfigs:
+  include:
+    - "~/.kube/*" # add extra kubeconfig paths if needed (supports globs)
   exclude: [] # paths to ignore
 hooks:
   preShell: 'echo "Entering $KUBERT_CONTEXT ($KUBERT_NAMESPACE)"'
