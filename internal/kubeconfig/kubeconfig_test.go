@@ -40,6 +40,15 @@ func TestFileSystemProvider_Load(t *testing.T) {
 		t.Fatal(err)
 	}
 
+	// Filter out the default kubeconfig if present
+	var filteredKubeconfigs []WithPath
+	for _, k := range kubeconfigs {
+		if k.FilePath == kubeconfigPath {
+			filteredKubeconfigs = append(filteredKubeconfigs, k)
+		}
+	}
+	kubeconfigs = filteredKubeconfigs
+
 	// Check that the correct kubeconfig file was loaded.
 	if len(kubeconfigs) != 1 || kubeconfigs[0].FilePath != kubeconfigPath {
 		t.Errorf("Load() = %v, want %v", kubeconfigs, []WithPath{{Config: kubeconfig, FilePath: kubeconfigPath}})
@@ -69,6 +78,15 @@ func TestFileSystemProvider_Load_NoFilesMatchIncludePatterns(t *testing.T) {
 		t.Fatal(err)
 	}
 
+	// Filter out the default kubeconfig if present
+	var filteredKubeconfigs []WithPath
+	for _, k := range kubeconfigs {
+		if k.FilePath != clientcmd.RecommendedHomeFile {
+			filteredKubeconfigs = append(filteredKubeconfigs, k)
+		}
+	}
+	kubeconfigs = filteredKubeconfigs
+
 	if len(kubeconfigs) != 0 {
 		t.Errorf("Load() = %v, want %v", kubeconfigs, []WithPath{})
 	}
@@ -94,6 +112,15 @@ func TestFileSystemProvider_Load_AllFilesMatchExcludePatterns(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+
+	// Filter out the default kubeconfig if present
+	var filteredKubeconfigs []WithPath
+	for _, k := range kubeconfigs {
+		if k.FilePath != clientcmd.RecommendedHomeFile {
+			filteredKubeconfigs = append(filteredKubeconfigs, k)
+		}
+	}
+	kubeconfigs = filteredKubeconfigs
 
 	if len(kubeconfigs) != 0 {
 		t.Errorf("Load() = %v, want %v", kubeconfigs, []WithPath{})

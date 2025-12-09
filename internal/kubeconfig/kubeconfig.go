@@ -42,6 +42,27 @@ func NewFileSystemProvider(IncludePatterns, ExcludePatterns []string) *FileSyste
 
 func (f *FileSystemProvider) Load() ([]WithPath, error) {
 	var kubeconfigs []WithPath
+	loadedPaths := make(map[string]bool)
+
+	// Include default 'recommended' kubeconfig path
+	defaultKubeconfigPath := clientcmd.RecommendedHomeFile
+	if _, err := os.Stat(defaultKubeconfigPath); err == nil {
+		defaultKubeconfig, err := clientcmd.LoadFromFile(defaultKubeconfigPath)
+		if err != nil {
+			return nil, fmt.Errorf("failed to load default kubeconfig: %w", err)
+		}
+
+		absPath, err := filepath.Abs(defaultKubeconfigPath)
+		if err != nil {
+			absPath = defaultKubeconfigPath
+		}
+
+		kubeconfigs = append(kubeconfigs, WithPath{Config: defaultKubeconfig, FilePath: defaultKubeconfigPath})
+		loadedPaths[absPath] = true
+	} else if !os.IsNotExist(err) {
+		return nil, fmt.Errorf("failed to stat default kubeconfig: %w", err)
+	}
+
 	files, err := findFiles(f.IncludePatterns)
 	if err != nil {
 		return nil, err
@@ -53,11 +74,21 @@ func (f *FileSystemProvider) Load() ([]WithPath, error) {
 	}
 
 	for _, file := range filteredFiles {
+		absPath, err := filepath.Abs(file)
+		if err != nil {
+			absPath = file
+		}
+
+		if loadedPaths[absPath] {
+			continue
+		}
+
 		kubeconfig, err := clientcmd.LoadFromFile(file)
 		if err != nil {
 			return nil, fmt.Errorf("failed to load kubeconfig from %s: %w", file, err)
 		}
 		kubeconfigs = append(kubeconfigs, WithPath{Config: kubeconfig, FilePath: file})
+		loadedPaths[absPath] = true
 	}
 
 	return kubeconfigs, nil
