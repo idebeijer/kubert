@@ -41,6 +41,14 @@ go install github.com/idebeijer/kubert@latest
 
 ## Quick Start
 
+Configure `kubert` to find your kubeconfigs by creating `~/.config/kubert/config.yaml` with the following content:
+
+```yaml
+kubeconfigs:
+  include:
+    - "~/.kube/**"
+```
+
 > Tip: install [`fzf`](https://github.com/junegunn/fzf) to pick contexts and namespaces interactively. Without it, kubert prints the available options so you can copy/paste.
 
 ```sh
