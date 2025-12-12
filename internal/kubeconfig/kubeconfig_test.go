@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"k8s.io/client-go/tools/clientcmd"
@@ -100,6 +101,19 @@ func TestFileSystemProvider_Load_AllFilesMatchExcludePatterns(t *testing.T) {
 	}
 }
 
+func TestFileSystemProvider_Load_TildeExpansion(t *testing.T) {
+	// This test ensures that using "~" as a pattern does not panic.
+	// We don't assert on the result because it depends on the user's home directory content,
+	// but we want to make sure the function returns (no panic).
+	provider := NewFileSystemProvider([]string{"~"}, nil)
+	_, err := provider.Load()
+	if err != nil {
+		// It's okay if it fails to load files (e.g. permission denied),
+		// but it shouldn't be a panic.
+		t.Logf("Load() with tilde returned error: %v", err)
+	}
+}
+
 func TestLoader_LoadContexts_DuplicateDetection(t *testing.T) {
 	kubeconfig1 := &api.Config{
 		Contexts: map[string]*api.Context{
@@ -128,15 +142,15 @@ func TestLoader_LoadContexts_DuplicateDetection(t *testing.T) {
 	}
 
 	expectedError := "duplicate context name \"prod-cluster\" found"
-	if !contains(err.Error(), expectedError) {
+	if !strings.Contains(err.Error(), expectedError) {
 		t.Errorf("LoadContexts() error = %v, want error containing %q", err, expectedError)
 	}
 
-	if !contains(err.Error(), "/path/to/config1") {
+	if !strings.Contains(err.Error(), "/path/to/config1") {
 		t.Errorf("LoadContexts() error should mention first file path, got: %v", err)
 	}
 
-	if !contains(err.Error(), "/path/to/config2") {
+	if !strings.Contains(err.Error(), "/path/to/config2") {
 		t.Errorf("LoadContexts() error should mention second file path, got: %v", err)
 	}
 }
@@ -190,17 +204,4 @@ func TestLoader_LoadContexts_NoDuplicates(t *testing.T) {
 			t.Errorf("expected context %s not found", name)
 		}
 	}
-}
-
-func contains(s, substr string) bool {
-	return len(s) >= len(substr) && (s == substr || len(s) > len(substr) && containsHelper(s, substr))
-}
-
-func containsHelper(s, substr string) bool {
-	for i := 0; i <= len(s)-len(substr); i++ {
-		if s[i:i+len(substr)] == substr {
-			return true
-		}
-	}
-	return false
 }

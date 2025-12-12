@@ -3,6 +3,7 @@ package state
 import (
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"sync"
@@ -43,15 +44,27 @@ func NewManager() (*Manager, error) {
 		fileLock: flock.New(fullPath + ".lock"),
 	}
 
+	// Acquire lock before checking/creating state file to avoid race conditions
+	if err := manager.Lock(); err != nil {
+		return nil, fmt.Errorf("failed to acquire lock during initialization: %w", err)
+	}
+	defer manager.Unlock()
+
 	// Check if the state file exists
 	if _, err := os.Stat(fullPath); os.IsNotExist(err) {
 		// Create the state file with an initial empty state
-		if err := manager.Save(); err != nil {
+		if err := manager.saveState(); err != nil {
 			return nil, err
 		}
 	} else {
-		if err := manager.Load(); err != nil {
-			return nil, err
+		// Load state directly without re-acquiring lock
+		data, err := os.ReadFile(manager.filename)
+		if err != nil {
+			return nil, fmt.Errorf("failed to read state file: %w", err)
+		}
+
+		if err := json.Unmarshal(data, &manager.state); err != nil {
+			return nil, fmt.Errorf("failed to unmarshal state: %w", err)
 		}
 	}
 
@@ -71,7 +84,7 @@ func (m *Manager) withLock(fn func() error) error {
 	}
 	defer func() {
 		if unlockErr := m.fileLock.Unlock(); unlockErr != nil {
-			// Log the error but don't override the original error
+			slog.Warn("failed to release file lock", "error", unlockErr)
 		}
 	}()
 

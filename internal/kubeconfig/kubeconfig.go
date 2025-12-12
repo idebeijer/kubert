@@ -64,10 +64,16 @@ func (f *FileSystemProvider) Load() ([]WithPath, error) {
 }
 
 func expandPath(path string) (string, error) {
+	// Expand environment variables first
+	path = os.ExpandEnv(path)
+
 	if strings.HasPrefix(path, "~") {
 		home, err := os.UserHomeDir()
 		if err != nil {
 			return "", fmt.Errorf("failed to get home directory for path %s: %w", path, err)
+		}
+		if path == "~" {
+			return home, nil
 		}
 		return filepath.Join(home, path[2:]), nil
 	}
