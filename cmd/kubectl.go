@@ -7,6 +7,7 @@ import (
 	"regexp"
 	"slices"
 	"strings"
+	"time"
 
 	"github.com/fatih/color"
 	"github.com/spf13/cobra"
@@ -136,6 +137,12 @@ func isCommandProtected(args []string, blockedCmds []string) bool {
 
 func isContextProtected(sm *state.Manager, context string, cfg config.Config) (bool, error) {
 	contextInfo, _ := sm.ContextInfo(context)
+
+	// Check if protection is temporarily lifted
+	if contextInfo.ProtectedUntil != nil && time.Now().Before(*contextInfo.ProtectedUntil) {
+		return false, nil
+	}
+
 	if contextInfo.Protected == nil && cfg.Protection.Regex != nil {
 		regex, err := regexp.Compile(*cfg.Protection.Regex)
 		if err != nil {

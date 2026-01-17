@@ -98,6 +98,7 @@ func (m *Manager) DeleteContextProtection(context string) error {
 func (m *Manager) IsContextProtected(context string) (bool, error) {
 	var result bool
 	var err error
+	var needsCleanup bool
 
 	_ = m.withMemoryLock(func() error {
 		info, exists := m.state.Contexts[context]
@@ -107,9 +108,13 @@ func (m *Manager) IsContextProtected(context string) (bool, error) {
 		}
 
 		// Check if protection is temporarily lifted
-		if info.ProtectedUntil != nil && time.Now().Before(*info.ProtectedUntil) {
-			result = false
-			return nil
+		if info.ProtectedUntil != nil {
+			if time.Now().Before(*info.ProtectedUntil) {
+				result = false
+				return nil
+			}
+			// Lift has expired, mark for cleanup
+			needsCleanup = true
 		}
 
 		if info.Protected == nil {
@@ -120,7 +125,17 @@ func (m *Manager) IsContextProtected(context string) (bool, error) {
 		return nil
 	})
 
-	return result, err
+	if err != nil {
+		return false, err
+	}
+
+	if needsCleanup {
+		// Clean up the expired timestamp
+		// We ignore the error here as it's a best effort cleanup and doesn't affect the result
+		_ = m.ClearProtectedUntil(context)
+	}
+
+	return result, nil
 }
 
 // LiftContextProtection temporarily lifts protection for the given context until the specified time

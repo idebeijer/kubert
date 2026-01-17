@@ -7,6 +7,7 @@ import (
 	"slices"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/adrg/xdg"
 )
@@ -365,5 +366,151 @@ func TestManager_ErrorHandling(t *testing.T) {
 				t.Errorf("Expected ContextNotFoundError, got %T", err)
 			}
 		})
+	}
+}
+
+func TestManager_LiftContextProtection(t *testing.T) {
+	manager, tempDir := setupTestManager(t)
+	defer cleanupTestManager(tempDir)
+
+	context := testContextName
+	namespace := testNamespaceName
+
+	// Create context first
+	if err := manager.SetLastNamespaceWithContextCreation(context, namespace); err != nil {
+		t.Fatal(err)
+	}
+
+	// Set protection
+	if err := manager.SetContextProtection(context, true); err != nil {
+		t.Fatal(err)
+	}
+
+	// Verify it's protected
+	protected, err := manager.IsContextProtected(context)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !protected {
+		t.Error("Expected context to be protected before lift")
+	}
+
+	// Lift protection for 1 hour
+	liftUntil := time.Now().Add(1 * time.Hour)
+	if err := manager.LiftContextProtection(context, liftUntil); err != nil {
+		t.Fatal(err)
+	}
+
+	// Verify protection is lifted (should return false because lift is active)
+	protected, err = manager.IsContextProtected(context)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if protected {
+		t.Error("Expected context protection to be lifted")
+	}
+
+	// Verify ProtectedUntil is set correctly
+	info, exists := manager.ContextInfo(context)
+	if !exists {
+		t.Fatal("Context should exist")
+	}
+	if info.ProtectedUntil == nil {
+		t.Error("ProtectedUntil should be set")
+	}
+	if !info.ProtectedUntil.Equal(liftUntil) {
+		t.Errorf("ProtectedUntil = %v, want %v", info.ProtectedUntil, liftUntil)
+	}
+}
+
+func TestManager_LiftContextProtection_Expired(t *testing.T) {
+	manager, tempDir := setupTestManager(t)
+	defer cleanupTestManager(tempDir)
+
+	context := testContextName
+	namespace := testNamespaceName
+
+	// Create context and set protection
+	if err := manager.SetLastNamespaceWithContextCreation(context, namespace); err != nil {
+		t.Fatal(err)
+	}
+	if err := manager.SetContextProtection(context, true); err != nil {
+		t.Fatal(err)
+	}
+
+	// Lift protection with an already-expired time
+	expiredTime := time.Now().Add(-1 * time.Hour)
+	if err := manager.LiftContextProtection(context, expiredTime); err != nil {
+		t.Fatal(err)
+	}
+
+	// Verify protection is still active (lift expired)
+	protected, err := manager.IsContextProtected(context)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !protected {
+		t.Error("Expected context to still be protected after expired lift")
+	}
+}
+
+func TestManager_ClearProtectedUntil(t *testing.T) {
+	manager, tempDir := setupTestManager(t)
+	defer cleanupTestManager(tempDir)
+
+	context := testContextName
+	namespace := testNamespaceName
+
+	// Create context and set protection with lift
+	if err := manager.SetLastNamespaceWithContextCreation(context, namespace); err != nil {
+		t.Fatal(err)
+	}
+	if err := manager.SetContextProtection(context, true); err != nil {
+		t.Fatal(err)
+	}
+	liftUntil := time.Now().Add(1 * time.Hour)
+	if err := manager.LiftContextProtection(context, liftUntil); err != nil {
+		t.Fatal(err)
+	}
+
+	// Verify lift is active
+	protected, _ := manager.IsContextProtected(context)
+	if protected {
+		t.Error("Expected lift to be active")
+	}
+
+	// Clear the lift
+	if err := manager.ClearProtectedUntil(context); err != nil {
+		t.Fatal(err)
+	}
+
+	// Verify protection is restored
+	protected, err := manager.IsContextProtected(context)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !protected {
+		t.Error("Expected context to be protected after clearing lift")
+	}
+
+	// Verify ProtectedUntil is nil
+	info, _ := manager.ContextInfo(context)
+	if info.ProtectedUntil != nil {
+		t.Error("ProtectedUntil should be nil after clear")
+	}
+}
+
+func TestManager_LiftContextProtection_NonExistingContext(t *testing.T) {
+	manager, tempDir := setupTestManager(t)
+	defer cleanupTestManager(tempDir)
+
+	err := manager.LiftContextProtection("non-existing", time.Now().Add(1*time.Hour))
+	if err == nil {
+		t.Error("LiftContextProtection should fail for non-existing context")
+	}
+
+	var contextNotFoundError *ContextNotFoundError
+	if !errors.As(err, &contextNotFoundError) {
+		t.Errorf("Expected ContextNotFoundError, got %T", err)
 	}
 }

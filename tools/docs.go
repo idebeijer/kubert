@@ -18,7 +18,7 @@ func main() {
 	if err := os.RemoveAll("./docs"); err != nil {
 		log.Fatal(err)
 	}
-	if err := os.MkdirAll("./docs", 0755); err != nil {
+	if err := os.MkdirAll("./docs", 0750); err != nil {
 		log.Fatal(err)
 	}
 

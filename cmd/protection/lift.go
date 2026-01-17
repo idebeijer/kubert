@@ -33,6 +33,10 @@ After the duration expires, protection will automatically be restored.`,
 				return fmt.Errorf("invalid duration %q: %w", args[0], err)
 			}
 
+			if duration <= 0 {
+				return fmt.Errorf("duration must be positive, got %s", duration)
+			}
+
 			sm, err := state.NewManager()
 			if err != nil {
 				return err

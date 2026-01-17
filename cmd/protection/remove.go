@@ -37,7 +37,9 @@ reverting the context to use the default regex-based protection from config.`,
 			}
 
 			// Also clear any active lift
-			_ = sm.ClearProtectedUntil(clientConfig.CurrentContext)
+			if err := sm.ClearProtectedUntil(clientConfig.CurrentContext); err != nil {
+				return fmt.Errorf("failed to clear active lift: %w", err)
+			}
 
 			fmt.Printf("Removed protection override for context %q (now using default regex)\n", clientConfig.CurrentContext)
 			return nil
