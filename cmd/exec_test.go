@@ -327,7 +327,7 @@ func TestExecuteInContextWithNamespace(t *testing.T) {
 func TestExecuteParallelIsolation(t *testing.T) {
 	tempDir := t.TempDir()
 
-	contexts := []kubeconfig.Context{}
+	contexts := make([]kubeconfig.Context, 0, 5)
 	for i := range 5 {
 		contextName := fmt.Sprintf("context-%d", i)
 		kubeconfigPath := filepath.Join(tempDir, fmt.Sprintf("config-%d", i))

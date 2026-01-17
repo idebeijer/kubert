@@ -25,7 +25,7 @@ func TestFileSystemProvider_Load(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer os.RemoveAll(dir)
+	defer func() { _ = os.RemoveAll(dir) }()
 
 	kubeconfigPath := filepath.Join(dir, "config")
 	kubeconfig := &api.Config{}
@@ -80,7 +80,7 @@ func TestFileSystemProvider_Load_AllFilesMatchExcludePatterns(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer os.RemoveAll(dir)
+	defer func() { _ = os.RemoveAll(dir) }()
 
 	kubeconfigPath := filepath.Join(dir, "config")
 	kubeconfig := &api.Config{}

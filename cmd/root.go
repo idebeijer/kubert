@@ -89,10 +89,7 @@ func (c *RootCmd) initConfig() {
 	viper.SetEnvKeyReplacer(strings.NewReplacer(".", "_"))
 	viper.AutomaticEnv()
 
-	// If a config file is found, read it in.
-	if err := viper.ReadInConfig(); err == nil {
-		// fmt.Fprintln(os.Stderr, "Using config file:", viper.ConfigFileUsed())
-	}
+	// Read config file if it exists
 	_ = viper.ReadInConfig()
 	_ = viper.Unmarshal(&config.Cfg)
 

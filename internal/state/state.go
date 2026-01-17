@@ -48,7 +48,11 @@ func NewManager() (*Manager, error) {
 	if err := manager.Lock(); err != nil {
 		return nil, fmt.Errorf("failed to acquire lock during initialization: %w", err)
 	}
-	defer manager.Unlock()
+	defer func() {
+		if unlockErr := manager.Unlock(); unlockErr != nil {
+			slog.Warn("failed to release lock during initialization", "error", unlockErr)
+		}
+	}()
 
 	// Check if the state file exists
 	if _, err := os.Stat(fullPath); os.IsNotExist(err) {

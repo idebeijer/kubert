@@ -11,6 +11,11 @@ import (
 	"github.com/adrg/xdg"
 )
 
+const (
+	testContextName   = "test-context"
+	testNamespaceName = "test-namespace"
+)
+
 func setupTestManager(t *testing.T) (*Manager, string) {
 	tempDir, err := os.MkdirTemp("", "kubert_test")
 	if err != nil {
@@ -28,7 +33,7 @@ func setupTestManager(t *testing.T) (*Manager, string) {
 }
 
 func cleanupTestManager(tempDir string) {
-	os.RemoveAll(tempDir)
+	_ = os.RemoveAll(tempDir)
 }
 
 func TestManager_SetLastNamespaceWithContextCreation(t *testing.T) {
@@ -62,8 +67,8 @@ func TestManager_ContextInfo(t *testing.T) {
 	manager, tempDir := setupTestManager(t)
 	defer cleanupTestManager(tempDir)
 
-	context := "test-context"
-	namespace := "test-namespace"
+	context := testContextName
+	namespace := testNamespaceName
 
 	if err := manager.SetLastNamespaceWithContextCreation(context, namespace); err != nil {
 		t.Fatal(err)
@@ -84,8 +89,8 @@ func TestManager_RemoveContext(t *testing.T) {
 	manager, tempDir := setupTestManager(t)
 	defer cleanupTestManager(tempDir)
 
-	context := "test-context"
-	namespace := "test-namespace"
+	context := testContextName
+	namespace := testNamespaceName
 
 	if err := manager.SetLastNamespaceWithContextCreation(context, namespace); err != nil {
 		t.Fatal(err)
@@ -125,7 +130,7 @@ func TestManager_ListContexts(t *testing.T) {
 			manager, tempDir := setupTestManager(t)
 			defer cleanupTestManager(tempDir)
 
-			namespace := "test-namespace"
+			namespace := testNamespaceName
 			for _, context := range tt.contexts {
 				if err := manager.SetLastNamespaceWithContextCreation(context, namespace); err != nil {
 					t.Fatal(err)
@@ -151,8 +156,8 @@ func TestStateManager_PersistenceAcrossInstances(t *testing.T) {
 	manager, tempDir := setupTestManager(t)
 	defer cleanupTestManager(tempDir)
 
-	context := "test-context"
-	namespace := "test-namespace"
+	context := testContextName
+	namespace := testNamespaceName
 
 	if err := manager.SetLastNamespaceWithContextCreation(context, namespace); err != nil {
 		t.Fatal(err)
@@ -173,8 +178,8 @@ func TestManager_ContextProtection(t *testing.T) {
 	manager, tempDir := setupTestManager(t)
 	defer cleanupTestManager(tempDir)
 
-	context := "test-context"
-	namespace := "test-namespace"
+	context := testContextName
+	namespace := testNamespaceName
 
 	if err := manager.SetLastNamespaceWithContextCreation(context, namespace); err != nil {
 		t.Fatal(err)
@@ -218,8 +223,8 @@ func TestManager_SetLastNamespace(t *testing.T) {
 	manager, tempDir := setupTestManager(t)
 	defer cleanupTestManager(tempDir)
 
-	context := "test-context"
-	namespace := "test-namespace"
+	context := testContextName
+	namespace := testNamespaceName
 
 	err := manager.SetLastNamespace(context, namespace)
 	if err == nil {

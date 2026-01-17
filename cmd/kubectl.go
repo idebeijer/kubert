@@ -91,7 +91,7 @@ func NewKubectlCommand() *cobra.Command {
 func promptUserConfirmation() bool {
 	var response string
 	fmt.Print("Are you sure you want to continue? [y/N]: ")
-	fmt.Scanln(&response)
+	_, _ = fmt.Scanln(&response)
 	return strings.ToLower(response) == "y" || strings.ToLower(response) == "yes"
 }
 

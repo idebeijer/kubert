@@ -21,7 +21,7 @@ func (m *Manager) ContextInfo(context string) (ContextInfo, bool) {
 	var info ContextInfo
 	var exists bool
 
-	m.withMemoryLock(func() error {
+	_ = m.withMemoryLock(func() error {
 		info, exists = m.state.Contexts[context]
 		return nil
 	})
@@ -58,7 +58,7 @@ func (m *Manager) SetLastNamespace(context, namespace string) error {
 func (m *Manager) ListContexts() []string {
 	var contexts []string
 
-	m.withMemoryLock(func() error {
+	_ = m.withMemoryLock(func() error {
 		contexts = make([]string, 0, len(m.state.Contexts))
 		for context := range m.state.Contexts {
 			contexts = append(contexts, context)
@@ -97,7 +97,7 @@ func (m *Manager) IsContextProtected(context string) (bool, error) {
 	var result bool
 	var err error
 
-	m.withMemoryLock(func() error {
+	_ = m.withMemoryLock(func() error {
 		info, exists := m.state.Contexts[context]
 		if !exists {
 			err = &ContextNotFoundError{Context: context}
@@ -141,7 +141,7 @@ func (m *Manager) GetLastContext() (string, bool) {
 	var lastContext string
 	var exists bool
 
-	m.withMemoryLock(func() error {
+	_ = m.withMemoryLock(func() error {
 		lastContext = m.state.LastContext
 		exists = lastContext != ""
 		return nil

@@ -93,7 +93,7 @@ Use '-' to switch to the previously selected context.`,
 }
 
 func getContextNames(contexts []kubeconfig.Context) []string {
-	var names []string
+	names := make([]string, 0, len(contexts))
 	for _, context := range contexts {
 		names = append(names, context.Name)
 	}
