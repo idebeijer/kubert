@@ -39,6 +39,10 @@ brew install idebeijer/tap/kubert --cask
 go install github.com/idebeijer/kubert@latest
 ```
 
+### Shell Completion
+
+If you installed via Homebrew, completions are usually installed automatically. To configure your shell to load them, see [Homebrew's Shell Completion docs](https://docs.brew.sh/Shell-Completion). Completions are also available through `kubert completion <shell>`.
+
 ## Quick Start
 
 By default, `kubert` searches for kubeconfigs in:
