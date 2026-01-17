@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"time"
 
 	"github.com/spf13/cobra"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -27,7 +28,8 @@ func NewNamespaceCommand() *cobra.Command {
 		SilenceUsage:      true,
 		ValidArgsFunction: validNamespaceArgsFunction,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			ctx := context.Background()
+			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+			defer cancel()
 
 			sm, err := state.NewManager()
 			if err != nil {
@@ -41,6 +43,9 @@ func NewNamespaceCommand() *cobra.Command {
 
 			namespaces, err := listNamespaces(ctx, clientset)
 			if err != nil {
+				if ctx.Err() == context.DeadlineExceeded {
+					return fmt.Errorf("timeout listing namespaces: cluster may be unreachable")
+				}
 				return err
 			}
 

@@ -2,6 +2,7 @@ package kubeconfig
 
 import (
 	"fmt"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"strings"
@@ -55,7 +56,8 @@ func (f *FileSystemProvider) Load() ([]WithPath, error) {
 	for _, file := range filteredFiles {
 		kubeconfig, err := clientcmd.LoadFromFile(file)
 		if err != nil {
-			return nil, fmt.Errorf("failed to load kubeconfig from %s: %w", file, err)
+			slog.Warn("skipping unreadable kubeconfig", "file", file, "error", err)
+			continue
 		}
 		kubeconfigs = append(kubeconfigs, WithPath{Config: kubeconfig, FilePath: file})
 	}
