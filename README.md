@@ -133,23 +133,32 @@ When a protected context sees a protected command, kubert will either exit immed
 kubert reads from `~/.config/kubert/config.yaml` (override with `kubert --config <path>`). A minimal example:
 
 ```yaml
+kubeconfigs:
+  include:
+    - "~/.kube/*" # add extra kubeconfig paths if needed (supports globs)
+  exclude: [] # paths to ignore
 contexts:
   protectedByDefaultRegexp: "(prod|prd)"
   protectedKubectlCommands:
     - delete
     - apply
   exitOnProtectedKubectlCmd: false
-kubeconfigs:
-  include:
-    - "~/.kube/*" # add extra kubeconfig paths if needed (supports globs)
-  exclude: [] # paths to ignore
 hooks:
   preShell: 'echo "Entering $KUBERT_CONTEXT ($KUBERT_NAMESPACE)"'
   postShell: 'echo "Exited $KUBERT_CONTEXT"'
 ```
 
-- Environment variables can override any setting (`KUBERT_CONTEXTS_PROTECTEDBYDEFAULTREGEXP`, etc.).
 - Run `kubert kubeconfig list` to confirm which kubeconfig files kubert will process.
+
+### Environment Variables
+
+All configuration settings can be overridden using environment variables prefixed with `KUBERT_`. The config structure is flattened, and dots (`.`) are replaced with underscores (`_`).
+
+Examples:
+
+- `fzf.opts` → `KUBERT_FZF_OPTS`
+- `contexts.protectedByDefaultRegexp` → `KUBERT_CONTEXTS_PROTECTEDBYDEFAULTREGEXP`
+- `hooks.preShell` → `KUBERT_HOOKS_PRESHELL`
 
 ### FZF Customization
 
@@ -168,27 +177,10 @@ This can also be overridden via environment variable: `KUBERT_FZF_OPTS`.
 
 Hooks let you run shell commands before and after kubert spawns the subshell. They execute in the parent shell, so you can adjust prompts, send notifications, or log actions.
 
+Name shell tab after selected Kubernetes context:
+
 ```yaml
 hooks:
   preShell: 'echo "\033]0;k8s: $KUBERT_CONTEXT\007"'
   postShell: 'echo "\033]0;\007"'
 ```
-
-Additional ideas:
-
-- Notify on prod access:
-  ```yaml
-  preShell: |
-    if [[ "$KUBERT_CONTEXT" == *"prod"* ]]; then
-      osascript -e 'display notification "Entering production context" with title "kubert"'
-    fi
-  postShell: |
-    if [[ "$KUBERT_CONTEXT" == *"prod"* ]]; then
-      osascript -e 'display notification "Exited production context" with title "kubert"'
-    fi
-  ```
-- Log usage:
-  ```yaml
-  preShell: 'echo "$(date): Entered $KUBERT_CONTEXT" >> ~/.kubert_usage.log'
-  postShell: 'echo "$(date): Exited $KUBERT_CONTEXT" >> ~/.kubert_usage.log'
-  ```
