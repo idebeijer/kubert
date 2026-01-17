@@ -2,6 +2,7 @@ package state
 
 import (
 	"fmt"
+	"time"
 )
 
 type ContextNotFoundError struct {
@@ -13,8 +14,9 @@ func (e *ContextNotFoundError) Error() string {
 }
 
 type ContextInfo struct {
-	LastNamespace string `json:"last_namespace"`
-	Protected     *bool  `json:"protected,omitempty"`
+	LastNamespace  string     `json:"last_namespace"`
+	Protected      *bool      `json:"protected,omitempty"`
+	ProtectedUntil *time.Time `json:"protected_until,omitempty"`
 }
 
 func (m *Manager) ContextInfo(context string) (ContextInfo, bool) {
@@ -96,6 +98,7 @@ func (m *Manager) DeleteContextProtection(context string) error {
 func (m *Manager) IsContextProtected(context string) (bool, error) {
 	var result bool
 	var err error
+	var needsCleanup bool
 
 	_ = m.withMemoryLock(func() error {
 		info, exists := m.state.Contexts[context]
@@ -103,6 +106,17 @@ func (m *Manager) IsContextProtected(context string) (bool, error) {
 			err = &ContextNotFoundError{Context: context}
 			return nil
 		}
+
+		// Check if protection is temporarily lifted
+		if info.ProtectedUntil != nil {
+			if time.Now().Before(*info.ProtectedUntil) {
+				result = false
+				return nil
+			}
+			// Lift has expired, mark for cleanup
+			needsCleanup = true
+		}
+
 		if info.Protected == nil {
 			result = false
 		} else {
@@ -111,7 +125,43 @@ func (m *Manager) IsContextProtected(context string) (bool, error) {
 		return nil
 	})
 
-	return result, err
+	if err != nil {
+		return false, err
+	}
+
+	if needsCleanup {
+		// Clean up the expired timestamp
+		// We ignore the error here as it's a best effort cleanup and doesn't affect the result
+		_ = m.ClearProtectedUntil(context)
+	}
+
+	return result, nil
+}
+
+// LiftContextProtection temporarily lifts protection for the given context until the specified time
+func (m *Manager) LiftContextProtection(context string, until time.Time) error {
+	return m.withLock(func() error {
+		info, exists := m.state.Contexts[context]
+		if !exists {
+			return &ContextNotFoundError{Context: context}
+		}
+		info.ProtectedUntil = &until
+		m.state.Contexts[context] = info
+		return m.saveState()
+	})
+}
+
+// ClearProtectedUntil clears the ProtectedUntil field for a context
+func (m *Manager) ClearProtectedUntil(context string) error {
+	return m.withLock(func() error {
+		info, exists := m.state.Contexts[context]
+		if !exists {
+			return &ContextNotFoundError{Context: context}
+		}
+		info.ProtectedUntil = nil
+		m.state.Contexts[context] = info
+		return m.saveState()
+	})
 }
 
 func (m *Manager) EnsureContextExists(context string) error {

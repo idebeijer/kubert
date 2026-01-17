@@ -13,19 +13,19 @@ Keep in mind, this will only work when using kubectl through the "kubert kubectl
 ### Options
 
 ```
-      --config string   config file (default is $HOME/.config/kubert/config.yaml)
+      --config string   config file (default is $HOME/.config/kubert/config.yaml, can be overridden by KUBERT_CONFIG)
       --debug           debug mode
   -h, --help            help for kubert
 ```
 
 ### SEE ALSO
 
-* [kubert context-protection](kubert_context-protection.md)	 - Protect and unprotect contexts
 * [kubert ctx](kubert_ctx.md)	 - Spawn a shell with the selected context
 * [kubert exec](kubert_exec.md)	 - Execute a command against multiple contexts
 * [kubert kubeconfig](kubert_kubeconfig.md)	 - Kubeconfig command
 * [kubert kubectl](kubert_kubectl.md)	 - Wrapper for kubectl
 * [kubert ns](kubert_ns.md)	 - Switch to a different namespace
+* [kubert protection](kubert_protection.md)	 - Manage context protection
 * [kubert version](kubert_version.md)	 - Display version and build information
 * [kubert which](kubert_which.md)	 - Display information about current context, namespace, or config
 
