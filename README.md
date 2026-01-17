@@ -151,6 +151,19 @@ hooks:
 - Environment variables can override any setting (`KUBERT_CONTEXTS_PROTECTEDBYDEFAULTREGEXP`, etc.).
 - Run `kubert kubeconfig list` to confirm which kubeconfig files kubert will process.
 
+### FZF Customization
+
+Customize fzf appearance via the `fzf.opts` config setting:
+
+```yaml
+fzf:
+  opts: "--height=50% --border --layout=reverse"
+```
+
+This can also be overridden via environment variable: `KUBERT_FZF_OPTS`.
+
+`FZF_DEFAULT_OPTS` is inherited natively by fzf and applies as a fallback.
+
 ### Shell Hooks
 
 Hooks let you run shell commands before and after kubert spawns the subshell. They execute in the parent shell, so you can adjust prompts, send notifications, or log actions.

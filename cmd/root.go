@@ -4,6 +4,7 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
@@ -85,6 +86,7 @@ func (c *RootCmd) initConfig() {
 	}
 
 	viper.SetEnvPrefix("kubert")
+	viper.SetEnvKeyReplacer(strings.NewReplacer(".", "_"))
 	viper.AutomaticEnv()
 
 	// If a config file is found, read it in.

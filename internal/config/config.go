@@ -14,6 +14,7 @@ type Config struct {
 	InteractiveShellMode bool            `mapstructure:"interactiveShellMode" yaml:"interactiveShellMode"`
 	Contexts             Contexts        `mapstructure:"contexts" yaml:"contexts"`
 	Hooks                Hooks           `mapstructure:"hooks" yaml:"hooks"`
+	Fzf                  Fzf             `mapstructure:"fzf" yaml:"fzf"`
 }
 
 type KubeconfigPaths struct {
@@ -48,6 +49,11 @@ type Hooks struct {
 	PostShell string `mapstructure:"postShell" yaml:"postShell"`
 }
 
+type Fzf struct {
+	// Opts are additional options passed to fzf when selecting contexts or namespaces.
+	Opts string `mapstructure:"opts" yaml:"opts"`
+}
+
 func init() {
 	viper.SetDefault("kubeconfigs.include", []string{
 		"~/.kube/config",
@@ -72,6 +78,7 @@ func init() {
 	viper.SetDefault("contexts.exitOnProtectedKubectlCmd", false)
 	viper.SetDefault("hooks.preShell", "")
 	viper.SetDefault("hooks.postShell", "")
+	viper.SetDefault("fzf.opts", "")
 }
 
 func GenerateDefaultYAML() (string, error) {
