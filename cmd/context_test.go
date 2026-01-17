@@ -14,7 +14,11 @@ func TestCreateTempKubeconfigFile_Isolation(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer os.Remove(tempFile.Name())
+	defer func() {
+		if err := os.Remove(tempFile.Name()); err != nil {
+			t.Fatal(err)
+		}
+	}()
 
 	// Define a complex configuration with multiple contexts, clusters, and users
 	config := api.NewConfig()
