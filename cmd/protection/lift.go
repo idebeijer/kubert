@@ -21,6 +21,8 @@ The duration argument is required and specifies how long protection should be li
 Examples: 5m (5 minutes), 1h (1 hour), 30s (30 seconds)
 
 After the duration expires, protection will automatically be restored.`,
+		Example: `  # Lift protection for 5 minutes
+  kubert protection lift 5m`,
 		Args: cobra.ExactArgs(1),
 		PreRunE: func(cmd *cobra.Command, args []string) error {
 			return kubert.ShellPreFlightCheck()

@@ -19,7 +19,7 @@ kubert which config [flags]
 ### Options inherited from parent commands
 
 ```
-      --config string   config file (default is $HOME/.config/kubert/config.yaml)
+      --config string   config file (default is $HOME/.config/kubert/config.yaml, can be overridden by KUBERT_CONFIG)
       --debug           debug mode
 ```
 

@@ -74,10 +74,12 @@ kubert exec "prod-*" "staging-?" -- kubectl get nodes
 kubert exec --regex "^(dev|qa)-.*" -- kubectl get pods
 kubert exec --parallel --dry-run "prod-*" -- kubectl rollout status
 
-# Mark the current context as (un)protected explicitly (overrides regex/defaults)
-kubert context-protection protect
-kubert context-protection unprotect
-kubert context-protection delete     # remove explicit override
+# Manage context protection
+kubert protection           # show current protection status
+kubert protection protect   # explicitly protect current context
+kubert protection unprotect # explicitly unprotect current context
+kubert protection lift 5m   # temporarily lift protection for 5 minutes
+kubert protection remove    # remove explicit override, fall back to regex
 
 # Inspect what kubert is using right now
 kubert which ctx
@@ -87,52 +89,61 @@ kubert kubeconfig list
 
 ## Command Reference
 
-| Command                                  | Purpose                                             | Highlights                                                                        |
-| ---------------------------------------- | --------------------------------------------------- | --------------------------------------------------------------------------------- |
-| `kubert ctx [<context>\|-]`              | Launch a shell pinned to a context                  | Supports interactive selection, remembers the previous context with `-`           |
-| `kubert ns [<namespace>]`                | Switch namespace inside the current kubert shell    | Lists namespaces when `fzf` is unavailable                                        |
-| `kubert exec [pattern...] -- <command>`  | Execute one command across multiple contexts        | Supports glob (`*`, `?`), `--regex`, `--parallel`, `--namespace`, and `--dry-run` |
-| `kubert kubectl <args...>`               | Run `kubectl` with protection checks                | Blocks/asks confirmation for commands marked as protected                         |
-| `kubert context-protection <subcommand>` | Manage protection status                            | `protect`, `unprotect`, `delete`, and `info` operate on the active context        |
-| `kubert which <ctx\|ns\|config>`         | Print the active context, namespace, or config path | Handy for scripts/prompts                                                         |
-| `kubert kubeconfig list`                 | List kubeconfig files kubert will scan              | Respects include/exclude settings                                                 |
+| Command                                 | Purpose                                             | Highlights                                                                        |
+| --------------------------------------- | --------------------------------------------------- | --------------------------------------------------------------------------------- |
+| `kubert ctx [<context>\|-]`             | Launch a shell pinned to a context                  | Supports interactive selection, remembers the previous context with `-`           |
+| `kubert ns [<namespace>]`               | Switch namespace inside the current kubert shell    | Lists namespaces when `fzf` is unavailable                                        |
+| `kubert exec [pattern...] -- <command>` | Execute one command across multiple contexts        | Supports glob (`*`, `?`), `--regex`, `--parallel`, `--namespace`, and `--dry-run` |
+| `kubert kubectl <args...>`              | Run `kubectl` with protection checks                | Blocks/asks confirmation for commands marked as protected                         |
+| `kubert protection <subcommand>`        | Manage context protection                           | `protect`, `unprotect`, `lift`, `remove`, and `info`                              |
+| `kubert which <ctx\|ns\|config>`        | Print the active context, namespace, or config path | Handy for scripts/prompts                                                         |
+| `kubert kubeconfig list`                | List kubeconfig files kubert will scan              | Respects include/exclude settings                                                 |
 
-## Configuration
-
-kubert reads from `~/.config/kubert/config.yaml`. You can override this location using the `KUBERT_CONFIG` environment variable or the `--config <path>` flag. A minimal example:
+kubert reads from `~/.config/kubert/config.yaml`. You can override this location using the `KUBERT_CONFIG` environment variable or the `--config <path>` flag.
 
 ```yaml
+# All settings shown with their defaults
 kubeconfigs:
-  # Paths to include where kubert will look for kubeconfigs (supports globs)
-  # Defaults:
   include:
-    - "~/.kube/*"
+    - "~/.kube/config"
     - "~/.kube/*.yml"
     - "~/.kube/*.yaml"
-  # Paths to ignore
   exclude: []
-contexts:
-  protectedByDefaultRegexp: "(prod|prd)"
-  protectedKubectlCommands:
+
+protection:
+  regex: null # regex pattern to auto-protect matching contexts (e.g., "(prod|prd)")
+  commands: # kubectl commands to block in protected contexts
     - delete
+    - edit
+    - exec
+    - drain
+    - scale
+    - autoscale
+    - replace
     - apply
-  exitOnProtectedKubectlCmd: false
+    - patch
+    - set
+  prompt: true # ask for confirmation (false = exit immediately)
+
 hooks:
-  preShell: 'echo "Entering $KUBERT_CONTEXT ($KUBERT_NAMESPACE)"'
-  postShell: 'echo "Exited $KUBERT_CONTEXT"'
+  preShell: "" # run before spawning shell
+  postShell: "" # run after exiting shell
+
+fzf:
+  opts: "" # additional fzf options
 ```
 
 - Run `kubert kubeconfig list` to confirm which kubeconfig files kubert will process.
 
 ### Environment Variables
 
-All configuration settings can be overridden using environment variables prefixed with `KUBERT_`. The config structure is flattened, and dots (`.`) are replaced with underscores (`_`).
+All config settings can be overridden via environment variables prefixed with `KUBERT_`. Dots (`.`) become underscores (`_`).
 
 Examples:
 
+- `protection.regex` → `KUBERT_PROTECTION_REGEX`
+- `protection.prompt` → `KUBERT_PROTECTION_PROMPT`
 - `fzf.opts` → `KUBERT_FZF_OPTS`
-- `contexts.protectedByDefaultRegexp` → `KUBERT_CONTEXTS_PROTECTEDBYDEFAULTREGEXP`
-- `hooks.preShell` → `KUBERT_HOOKS_PRESHELL`
 
 ### FZF Customization
 
@@ -172,26 +183,27 @@ Context protection ensures destructive commands can’t hit sensitive clusters b
 Add a regular expression to your config to protect any context whose name matches:
 
 ```yaml
-contexts:
-  protectedByDefaultRegexp: "(prd|prod)"
-  protectedKubectlCommands:
+protection:
+  regex: "(prd|prod)" # protect contexts matching this pattern
+  commands:
     - delete
     - apply
     - scale
+  prompt: true # ask for confirmation (false = exit immediately)
 ```
 
-- Omit or set the value to `null` to disable automatic protection.
-- Use an empty string (`""`) to protect every context by default.
+- Omit or set `regex: null` to disable automatic protection.
+- Use `regex: ""` to protect every context by default.
 
 ### Explicit overrides
 
-Use the CLI when you want to mark a specific context as protected or unprotected regardless of the regex:
+Use the CLI to manage protection for the current context:
 
 ```sh
-kubert context-protection protect   # enforce protection
-kubert context-protection unprotect # lift protection
-kubert context-protection delete    # remove explicit override and fall back to regex/default
-kubert context-protection info      # show the current protection status
+kubert protection protect   # explicitly protect this context
+kubert protection unprotect # explicitly unprotect this context
+kubert protection lift 5m   # temporarily lift protection for 5 minutes
+kubert protection remove    # remove explicit override, fall back to default regex
 ```
 
-When a protected context sees a protected command, kubert will either exit immediately (`contexts.exitOnProtectedKubectlCmd: true`) or prompt for confirmation.
+When a protected context sees a protected command, kubert will prompt for confirmation (`prompt: true`) or exit immediately (`prompt: false`).
