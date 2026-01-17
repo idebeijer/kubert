@@ -79,9 +79,9 @@ kubert exec --regex "^(dev|qa)-.*" -- kubectl get pods
 kubert exec --parallel --dry-run "prod-*" -- kubectl rollout status
 
 # Manage context protection
-kubert protection           # show current protection status
-kubert protection protect   # explicitly protect current context
-kubert protection unprotect # explicitly unprotect current context
+kubert protection info      # show current protection status
+kubert protection protect   # explicitly protect current context (overrides default regex)
+kubert protection unprotect # explicitly unprotect current context (overrides default regex)
 kubert protection lift 5m   # temporarily lift protection for 5 minutes
 kubert protection remove    # remove explicit override, fall back to regex
 
