@@ -99,6 +99,8 @@ kubert kubeconfig list
 | `kubert which <ctx\|ns\|config>`        | Print the active context, namespace, or config path | Handy for scripts/prompts                                                         |
 | `kubert kubeconfig list`                | List kubeconfig files kubert will scan              | Respects include/exclude settings                                                 |
 
+## Configuration
+
 kubert reads from `~/.config/kubert/config.yaml`. You can override this location using the `KUBERT_CONFIG` environment variable or the `--config <path>` flag.
 
 ```yaml
@@ -133,7 +135,7 @@ fzf:
   opts: "" # additional fzf options
 ```
 
-- Run `kubert kubeconfig list` to confirm which kubeconfig files kubert will process.
+> Tip: run `kubert kubeconfig list` to confirm which kubeconfig files kubert will process.
 
 ### Environment Variables
 
