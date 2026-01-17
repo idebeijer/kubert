@@ -134,9 +134,14 @@ kubert reads from `~/.config/kubert/config.yaml` (override with `kubert --config
 
 ```yaml
 kubeconfigs:
+  # Paths to include where kubert will look for kubeconfigs (supports globs)
+  # Defaults:
   include:
-    - "~/.kube/*" # add extra kubeconfig paths if needed (supports globs)
-  exclude: [] # paths to ignore
+    - "~/.kube/*"
+    - "~/.kube/*.yml"
+    - "~/.kube/*.yaml"
+  # Paths to ignore
+  exclude: []
 contexts:
   protectedByDefaultRegexp: "(prod|prd)"
   protectedKubectlCommands:

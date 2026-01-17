@@ -57,6 +57,8 @@ type Fzf struct {
 func init() {
 	viper.SetDefault("kubeconfigs.include", []string{
 		"~/.kube/config",
+		"~/.kube/*.yml",
+		"~/.kube/*.yaml",
 	})
 	viper.SetDefault("kubeconfigs.exclude", []string{})
 	viper.SetDefault("interactiveShellMode", true)
