@@ -304,8 +304,8 @@ func executeInContext(ctx kubeconfig.Context, args []string, namespace string, s
 	}
 
 	if locked {
-		if cfg.Contexts.ExitOnProtectedKubectlCmd {
-			result.err = fmt.Errorf("context is protected and ExitOnProtectedKubectlCmd is enabled")
+		if !cfg.Protection.Prompt {
+			result.err = fmt.Errorf("context is protected and prompt is disabled")
 			return result
 		}
 
@@ -382,7 +382,7 @@ func showDryRun(contexts []kubeconfig.Context, args []string, namespace string, 
 		status := green("✓")
 		statusText := ""
 		if locked {
-			if cfg.Contexts.ExitOnProtectedKubectlCmd {
+			if !cfg.Protection.Prompt {
 				status = yellow("⊘")
 				statusText = " (protected - will be skipped)"
 			} else {

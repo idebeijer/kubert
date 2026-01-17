@@ -52,9 +52,9 @@ func NewKubectlCommand() *cobra.Command {
 				return err
 			}
 
-			if locked && isCommandProtected(args, cfg.Contexts.ProtectedKubectlCommands) {
+			if locked && isCommandProtected(args, cfg.Protection.Commands) {
 
-				if cfg.Contexts.ExitOnProtectedKubectlCmd {
+				if !cfg.Protection.Prompt {
 					fmt.Printf("You tried to run the protected kubectl command \"%s\" in the protected context \"%s\".\n\n"+
 						"The command has not been executed and kubert will exit immediately.\n"+
 						"Exiting...\n", args[0], clientConfig.CurrentContext)
@@ -136,8 +136,8 @@ func isCommandProtected(args []string, blockedCmds []string) bool {
 
 func isContextProtected(sm *state.Manager, context string, cfg config.Config) (bool, error) {
 	contextInfo, _ := sm.ContextInfo(context)
-	if contextInfo.Protected == nil && cfg.Contexts.ProtectedByDefaultRegexp != nil {
-		regex, err := regexp.Compile(*cfg.Contexts.ProtectedByDefaultRegexp)
+	if contextInfo.Protected == nil && cfg.Protection.Regex != nil {
+		regex, err := regexp.Compile(*cfg.Protection.Regex)
 		if err != nil {
 			return false, fmt.Errorf("failed to compile regex: %w", err)
 		}

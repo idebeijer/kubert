@@ -1,19 +1,23 @@
-package contextprotection
+package protection
 
 import (
+	"fmt"
+
+	"github.com/spf13/cobra"
+
 	"github.com/idebeijer/kubert/internal/kubert"
 	"github.com/idebeijer/kubert/internal/state"
 	"github.com/idebeijer/kubert/internal/util"
-	"github.com/spf13/cobra"
 )
 
 func NewProtectCommand() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "protect",
-		Short: "Protect current context",
-		Long: `Protect current context.
+		Short: "Explicitly protect current context",
+		Long: `Explicitly protect the current context.
 
-This will set an explicit "protect" for the current context. That means it wil override the default setting. If the current context should use the default again, use "kubert context-protection delete".`,
+This sets an explicit protection override for the current context.
+To revert to the default regex-based protection, use "kubert protection remove".`,
 		PreRunE: func(cmd *cobra.Command, args []string) error {
 			return kubert.ShellPreFlightCheck()
 		},
@@ -32,6 +36,10 @@ This will set an explicit "protect" for the current context. That means it wil o
 				return err
 			}
 
+			// Clear any active lift
+			_ = sm.ClearProtectedUntil(clientConfig.CurrentContext)
+
+			fmt.Printf("Context %q is now protected\n", clientConfig.CurrentContext)
 			return nil
 		},
 	}

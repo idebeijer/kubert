@@ -1,19 +1,23 @@
-package contextprotection
+package protection
 
 import (
+	"fmt"
+
+	"github.com/spf13/cobra"
+
 	"github.com/idebeijer/kubert/internal/kubert"
 	"github.com/idebeijer/kubert/internal/state"
 	"github.com/idebeijer/kubert/internal/util"
-	"github.com/spf13/cobra"
 )
 
-func NewDeleteCommand() *cobra.Command {
+func NewRemoveCommand() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "delete",
-		Short: "Delete protection setting for the current context",
-		Long: `Delete protection setting for the current context.
+		Use:   "remove",
+		Short: "Remove explicit protection override",
+		Long: `Remove any explicit protection override for the current context.
 
-This will delete the explicit protect/unprotect setting for the current context. So if either "protect" or "unprotect" was set, it will be removed and the default will be used.`,
+This clears both the explicit protected/unprotected setting and any active lift,
+reverting the context to use the default regex-based protection from config.`,
 		PreRunE: func(cmd *cobra.Command, args []string) error {
 			return kubert.ShellPreFlightCheck()
 		},
@@ -32,6 +36,10 @@ This will delete the explicit protect/unprotect setting for the current context.
 				return err
 			}
 
+			// Also clear any active lift
+			_ = sm.ClearProtectedUntil(clientConfig.CurrentContext)
+
+			fmt.Printf("Removed protection override for context %q (now using default regex)\n", clientConfig.CurrentContext)
 			return nil
 		},
 	}

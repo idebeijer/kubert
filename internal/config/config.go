@@ -12,7 +12,7 @@ var Cfg Config
 type Config struct {
 	KubeconfigPaths      KubeconfigPaths `mapstructure:"kubeconfigs" yaml:"kubeconfigs"`
 	InteractiveShellMode bool            `mapstructure:"interactiveShellMode" yaml:"interactiveShellMode"`
-	Contexts             Contexts        `mapstructure:"contexts" yaml:"contexts"`
+	Protection           Protection      `mapstructure:"protection" yaml:"protection"`
 	Hooks                Hooks           `mapstructure:"hooks" yaml:"hooks"`
 	Fzf                  Fzf             `mapstructure:"fzf" yaml:"fzf"`
 }
@@ -30,15 +30,16 @@ type LocalKubeconfigProvider struct {
 	Enabled bool `mapstructure:"enabled" yaml:"enabled"`
 }
 
-type Contexts struct {
-	// ProtectedByDefaultRegexp is a regex that matches contexts that should be protected by default.
-	ProtectedByDefaultRegexp *string `mapstructure:"protectedByDefaultRegexp" yaml:"protectedByDefaultRegexp"`
+type Protection struct {
+	// Regex is a regular expression that matches contexts that should be protected by default.
+	Regex *string `mapstructure:"regex" yaml:"regex"`
 
-	// ProtectedKubectlCommands is a list of kubectl commands that should be blocked when the context is protected.
-	ProtectedKubectlCommands []string `mapstructure:"protectedKubectlCommands" yaml:"protectedKubectlCommands"`
+	// Commands is a list of kubectl commands that should be blocked when the context is protected.
+	Commands []string `mapstructure:"commands" yaml:"commands"`
 
-	// ExitOnProtectedKubectlCmd disables the default confirmation prompt and instead immediately exits out if the context is protected.
-	ExitOnProtectedKubectlCmd bool `mapstructure:"exitOnProtectedKubectlCmd" yaml:"exitOnProtectedKubectlCmd"`
+	// Prompt enables the confirmation prompt before running protected commands.
+	// If false, kubert will immediately exit when a protected command is run.
+	Prompt bool `mapstructure:"prompt" yaml:"prompt"`
 }
 
 type Hooks struct {
@@ -62,14 +63,12 @@ func init() {
 	})
 	viper.SetDefault("kubeconfigs.exclude", []string{})
 	viper.SetDefault("interactiveShellMode", true)
-	viper.SetDefault("contexts.protectedByDefaultRegexp", nil)
-	viper.SetDefault("contexts.protectedKubectlCommands", []string{
+	viper.SetDefault("protection.regex", nil)
+	viper.SetDefault("protection.commands", []string{
 		"delete",
 		"edit",
 		"exec",
 		"drain",
-		"cordon",
-		"uncordon",
 		"scale",
 		"autoscale",
 		"replace",
@@ -77,7 +76,7 @@ func init() {
 		"patch",
 		"set",
 	})
-	viper.SetDefault("contexts.exitOnProtectedKubectlCmd", false)
+	viper.SetDefault("protection.prompt", true)
 	viper.SetDefault("hooks.preShell", "")
 	viper.SetDefault("hooks.postShell", "")
 	viper.SetDefault("fzf.opts", "")
