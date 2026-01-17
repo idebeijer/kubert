@@ -44,10 +44,8 @@ func runSetProtection(protect bool) error {
 		return err
 	}
 
-	// Clear any active lift
-	if err := sm.ClearProtectedUntil(clientConfig.CurrentContext); err != nil {
-		return fmt.Errorf("failed to clear active lift: %w", err)
-	}
+	// Clear any active lift (best effort, ignore errors since main operation succeeded)
+	_ = sm.ClearProtectedUntil(clientConfig.CurrentContext)
 
 	status := "unprotected"
 	if protect {

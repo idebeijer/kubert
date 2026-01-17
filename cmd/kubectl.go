@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -136,14 +137,29 @@ func isCommandProtected(args []string, blockedCmds []string) bool {
 }
 
 func isContextProtected(sm *state.Manager, context string, cfg config.Config) (bool, error) {
-	contextInfo, _ := sm.ContextInfo(context)
-
-	// Check if protection is temporarily lifted
-	if contextInfo.ProtectedUntil != nil && time.Now().Before(*contextInfo.ProtectedUntil) {
-		return false, nil
+	// First check explicit protection and lift status via state manager
+	explicitlyProtected, err := sm.IsContextProtected(context)
+	if err != nil {
+		// Context doesn't exist in state, check regex-based default
+		var contextNotFoundError *state.ContextNotFoundError
+		if !errors.As(err, &contextNotFoundError) {
+			return false, err
+		}
+		// Fall through to regex check
+	} else {
+		// Check if there's an explicit protection setting
+		contextInfo, _ := sm.ContextInfo(context)
+		if contextInfo.Protected != nil {
+			return explicitlyProtected, nil
+		}
+		// If lift is active, protection is already handled by IsContextProtected
+		if contextInfo.ProtectedUntil != nil && time.Now().Before(*contextInfo.ProtectedUntil) {
+			return false, nil
+		}
 	}
 
-	if contextInfo.Protected == nil && cfg.Protection.Regex != nil {
+	// No explicit protection set, check regex-based default
+	if cfg.Protection.Regex != nil {
 		regex, err := regexp.Compile(*cfg.Protection.Regex)
 		if err != nil {
 			return false, fmt.Errorf("failed to compile regex: %w", err)
@@ -152,10 +168,6 @@ func isContextProtected(sm *state.Manager, context string, cfg config.Config) (b
 		if regex.MatchString(context) {
 			return true, nil
 		}
-	}
-
-	if contextInfo.Protected != nil && *contextInfo.Protected {
-		return true, nil
 	}
 
 	return false, nil

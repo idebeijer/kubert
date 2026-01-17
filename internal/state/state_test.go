@@ -514,3 +514,18 @@ func TestManager_LiftContextProtection_NonExistingContext(t *testing.T) {
 		t.Errorf("Expected ContextNotFoundError, got %T", err)
 	}
 }
+
+func TestManager_ClearProtectedUntil_NonExistingContext(t *testing.T) {
+	manager, tempDir := setupTestManager(t)
+	defer cleanupTestManager(tempDir)
+
+	err := manager.ClearProtectedUntil("non-existing")
+	if err == nil {
+		t.Error("ClearProtectedUntil should fail for non-existing context")
+	}
+
+	var contextNotFoundError *ContextNotFoundError
+	if !errors.As(err, &contextNotFoundError) {
+		t.Errorf("Expected ContextNotFoundError, got %T", err)
+	}
+}
