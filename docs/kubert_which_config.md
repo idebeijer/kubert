@@ -25,5 +25,5 @@ kubert which config [flags]
 
 ### SEE ALSO
 
-* [kubert which](kubert_which.md)	 - Display information about current context, namespace, or config
+* [kubert which](kubert_which.md)	 - Display information about current context, cluster, namespace, or config
 

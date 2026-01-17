@@ -13,7 +13,8 @@ kubert protection info [flags]
 ### Options
 
 ```
-  -h, --help   help for info
+  -h, --help            help for info
+  -o, --output string   Output format (short)
 ```
 
 ### Options inherited from parent commands

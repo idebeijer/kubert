@@ -1,19 +1,19 @@
-## kubert which ctx
+## kubert which cluster
 
-Display the current Kubernetes context
+Display the current Kubernetes cluster
 
 ### Synopsis
 
-Display the current Kubernetes context.
+Display the current Kubernetes cluster name for the active context.
 
 ```
-kubert which ctx [flags]
+kubert which cluster [flags]
 ```
 
 ### Options
 
 ```
-  -h, --help   help for ctx
+  -h, --help   help for cluster
 ```
 
 ### Options inherited from parent commands

@@ -172,6 +172,55 @@ hooks:
   postShell: 'echo "\033]0;\007"'
 ```
 
+### Starship Prompt Integration
+
+You can show the current context protection status in your prompt using a custom [starship.rs](https://starship.rs) module.
+Add the following to your `starship.toml`:
+
+<details>
+<summary>Click to expand configuration</summary>
+
+```toml
+[custom.kubert]
+command = '''
+  BINARY="kubert"
+  prot=$($BINARY protection info -o short)
+
+  red="\033[31m"
+  yellow="\033[33m"
+  green="\033[32m"
+  reset="\033[0m"
+
+  case "$prot" in
+    "lifted")      color=$yellow ;;
+    "unprotected") color=$green ;;
+    "protected")   color=$red ;;
+    *)             color=$reset ;;
+  esac
+
+  printf "${color}${prot}${reset}"
+'''
+format = '\([ctx-protection](dimmed white):$output(dimmed white)\) '
+when = 'test -n "$KUBERT_SHELL_ACTIVE"'
+```
+
+Looks like:
+
+```bash
+(orbstack:default) (ctx-protection:protected) ~
+❯ k get pods
+```
+
+</details>
+
+For the context and namespace display, the standard `[kubernetes]` module works out of the box because kubert manages the standard `KUBECONFIG` environment variable:
+
+```toml
+[kubernetes]
+format = '\([($cluster)](red):[$namespace](cyan)\) '
+disabled = false
+```
+
 ## Context Protection
 
 > [!WARNING]  
