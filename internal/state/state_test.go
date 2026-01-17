@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"slices"
 	"sync"
 	"testing"
 
@@ -137,13 +138,7 @@ func TestManager_ListContexts(t *testing.T) {
 			}
 
 			for _, context := range tt.contexts {
-				found := false
-				for _, listedContext := range listedContexts {
-					if context == listedContext {
-						found = true
-						break
-					}
-				}
+				found := slices.Contains(listedContexts, context)
 				if !found {
 					t.Errorf("ListContexts() missing context %v", context)
 				}
@@ -288,10 +283,10 @@ func TestManager_ConcurrentAccess(t *testing.T) {
 	var wg sync.WaitGroup
 	wg.Add(numGoroutines)
 
-	for i := 0; i < numGoroutines; i++ {
+	for i := range numGoroutines {
 		go func(id int) {
 			defer wg.Done()
-			for j := 0; j < numOperations; j++ {
+			for j := range numOperations {
 				context := fmt.Sprintf("context-%d-%d", id, j)
 				namespace := fmt.Sprintf("namespace-%d-%d", id, j)
 

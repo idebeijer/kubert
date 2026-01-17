@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"slices"
 	"time"
 
 	"github.com/spf13/cobra"
@@ -111,13 +112,7 @@ func printNamespaces(contextNames []string) {
 }
 
 func switchNamespace(sm *state.Manager, namespace string, namespaces []string) error {
-	namespaceExists := false
-	for _, ns := range namespaces {
-		if ns == namespace {
-			namespaceExists = true
-			break
-		}
-	}
+	namespaceExists := slices.Contains(namespaces, namespace)
 	if !namespaceExists {
 		return fmt.Errorf("namespace \"%s\" does not exist", namespace)
 	}

@@ -5,6 +5,7 @@ import (
 	"os"
 	"os/exec"
 	"regexp"
+	"slices"
 	"strings"
 
 	"github.com/fatih/color"
@@ -126,10 +127,8 @@ func validKubectlArgsFunction(cmd *cobra.Command, args []string, toComplete stri
 
 func isCommandProtected(args []string, blockedCmds []string) bool {
 	if len(args) > 0 {
-		for _, blockedCmd := range blockedCmds {
-			if args[0] == blockedCmd {
-				return true
-			}
+		if slices.Contains(blockedCmds, args[0]) {
+			return true
 		}
 	}
 	return false

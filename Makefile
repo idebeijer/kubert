@@ -32,6 +32,14 @@ test-race: ## Run tests with race detection
 test-short: ## Run tests in short mode
 	go test -short -v ./...
 
+.PHONY: lint
+lint:
+	golangci-lint run
+
+.PHONY: lint-fix
+lint-fix:
+	golangci-lint run --fix
+
 ##@ Build
 
 .PHONY: build

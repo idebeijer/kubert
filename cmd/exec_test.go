@@ -328,7 +328,7 @@ func TestExecuteParallelIsolation(t *testing.T) {
 	tempDir := t.TempDir()
 
 	contexts := []kubeconfig.Context{}
-	for i := 0; i < 5; i++ {
+	for i := range 5 {
 		contextName := fmt.Sprintf("context-%d", i)
 		kubeconfigPath := filepath.Join(tempDir, fmt.Sprintf("config-%d", i))
 		cfg := createTestKubeconfig(t, kubeconfigPath, contextName, "cluster-"+contextName, "user-"+contextName)

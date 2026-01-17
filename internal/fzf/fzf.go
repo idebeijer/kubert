@@ -3,6 +3,7 @@ package fzf
 import (
 	"os"
 	"os/exec"
+	"slices"
 	"strings"
 
 	"github.com/idebeijer/kubert/internal/config"
@@ -28,13 +29,7 @@ func buildFzfArgs(multiSelect bool) []string {
 	}
 
 	// Always ensure --ansi is present for color support
-	hasAnsi := false
-	for _, arg := range args {
-		if arg == "--ansi" {
-			hasAnsi = true
-			break
-		}
-	}
+	hasAnsi := slices.Contains(args, "--ansi")
 	if !hasAnsi {
 		args = append(args, "--ansi")
 	}
