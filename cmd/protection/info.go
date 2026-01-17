@@ -25,10 +25,16 @@ func NewInfoCommand() *cobra.Command {
 		RunE: runInfo,
 	}
 
+	cmd.Flags().StringP("output", "o", "", "Output format (short)")
 	return cmd
 }
 
 func runInfo(cmd *cobra.Command, args []string) error {
+	output, _ := cmd.Flags().GetString("output")
+	if output != "" && output != "short" {
+		return fmt.Errorf("invalid output format: %s", output)
+	}
+
 	cfg := config.Cfg
 	sm, err := state.NewManager()
 	if err != nil {
@@ -40,10 +46,10 @@ func runInfo(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	return protectionStatus(sm, clientConfig.CurrentContext, cfg)
+	return protectionStatus(sm, clientConfig.CurrentContext, cfg, output)
 }
 
-func protectionStatus(sm *state.Manager, context string, cfg config.Config) error {
+func protectionStatus(sm *state.Manager, context string, cfg config.Config, output string) error {
 	contextInfo, _ := sm.ContextInfo(context)
 
 	yellow := color.New(color.FgHiYellow).SprintFunc()
@@ -51,13 +57,21 @@ func protectionStatus(sm *state.Manager, context string, cfg config.Config) erro
 	red := color.New(color.FgRed).SprintFunc()
 	cyan := color.New(color.FgCyan).SprintFunc()
 
-	fmt.Printf("Context: %s\n\n", cyan(context))
+	isShort := output == "short"
+
+	if !isShort {
+		fmt.Printf("Context: %s\n\n", cyan(context))
+	}
 
 	// Check for active lift
 	if contextInfo.ProtectedUntil != nil {
 		if time.Now().Before(*contextInfo.ProtectedUntil) {
-			fmt.Printf("%s Status: %s until %s\n", yellow("⏳"), yellow("LIFTED"), contextInfo.ProtectedUntil.Format(time.RFC3339))
-			fmt.Printf("   Remaining: %s\n", time.Until(*contextInfo.ProtectedUntil).Round(time.Second))
+			if isShort {
+				fmt.Println("lifted")
+			} else {
+				fmt.Printf("%s Status: %s until %s\n", yellow("⏳"), yellow("LIFTED"), contextInfo.ProtectedUntil.Format(time.RFC3339))
+				fmt.Printf("   Remaining: %s\n", time.Until(*contextInfo.ProtectedUntil).Round(time.Second))
+			}
 			return nil
 		}
 	}
@@ -65,11 +79,21 @@ func protectionStatus(sm *state.Manager, context string, cfg config.Config) erro
 	// Check explicit protection setting
 	if contextInfo.Protected != nil {
 		if *contextInfo.Protected {
-			fmt.Printf("%s Status: %s (explicit override)\n", red("🔒"), red("PROTECTED"))
+			if isShort {
+				fmt.Println("protected")
+			} else {
+				fmt.Printf("%s Status: %s (explicit override)\n", red("🔒"), red("PROTECTED"))
+			}
 		} else {
-			fmt.Printf("%s Status: %s (explicit override)\n", green("🔓"), green("UNPROTECTED"))
+			if isShort {
+				fmt.Println("unprotected")
+			} else {
+				fmt.Printf("%s Status: %s (explicit override)\n", green("🔓"), green("UNPROTECTED"))
+			}
 		}
-		fmt.Println("   Use 'kubert protection remove' to revert to default")
+		if !isShort {
+			fmt.Println("   Use 'kubert protection remove' to revert to default")
+		}
 		return nil
 	}
 
@@ -81,14 +105,26 @@ func protectionStatus(sm *state.Manager, context string, cfg config.Config) erro
 		}
 
 		if regex.MatchString(context) {
-			fmt.Printf("%s Status: %s (matches default regex)\n", red("🔒"), red("PROTECTED"))
-			fmt.Printf("   Regex: %s\n", *cfg.Protection.Regex)
+			if isShort {
+				fmt.Println("protected")
+			} else {
+				fmt.Printf("%s Status: %s (matches default regex)\n", red("🔒"), red("PROTECTED"))
+				fmt.Printf("   Regex: %s\n", *cfg.Protection.Regex)
+			}
 		} else {
-			fmt.Printf("%s Status: %s (does not match default regex)\n", green("🔓"), green("UNPROTECTED"))
+			if isShort {
+				fmt.Println("unprotected")
+			} else {
+				fmt.Printf("%s Status: %s (does not match default regex)\n", green("🔓"), green("UNPROTECTED"))
+			}
 		}
 		return nil
 	}
 
-	fmt.Printf("%s Status: %s (no protection configured)\n", green("🔓"), green("UNPROTECTED"))
+	if isShort {
+		fmt.Println("unprotected")
+	} else {
+		fmt.Printf("%s Status: %s (no protection configured)\n", green("🔓"), green("UNPROTECTED"))
+	}
 	return nil
 }
