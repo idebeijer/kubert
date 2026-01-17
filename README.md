@@ -130,7 +130,7 @@ When a protected context sees a protected command, kubert will either exit immed
 
 ## Configuration
 
-kubert reads from `~/.config/kubert/config.yaml` (override with `kubert --config <path>`). A minimal example:
+kubert reads from `~/.config/kubert/config.yaml`. You can override this location using the `KUBERT_CONFIG` environment variable or the `--config <path>` flag. A minimal example:
 
 ```yaml
 kubeconfigs:

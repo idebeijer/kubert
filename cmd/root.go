@@ -54,7 +54,7 @@ func (c *RootCmd) initFlags() {
 	c.PersistentFlags().Bool("debug", false, "debug mode")
 	_ = viper.BindPFlag("debug", c.PersistentFlags().Lookup("debug"))
 
-	c.PersistentFlags().StringVar(&c.cfgFile, "config", "", "config file (default is $HOME/.config/kubert/config.yaml)")
+	c.PersistentFlags().StringVar(&c.cfgFile, "config", "", "config file (default is $HOME/.config/kubert/config.yaml, can be overridden by KUBERT_CONFIG)")
 }
 
 func (c *RootCmd) addCommands() {
@@ -71,7 +71,9 @@ func (c *RootCmd) addCommands() {
 func (c *RootCmd) initConfig() {
 	var level slog.Level
 
-	if c.cfgFile != "" {
+	if os.Getenv("KUBERT_CONFIG") != "" {
+		viper.SetConfigFile(os.Getenv("KUBERT_CONFIG"))
+	} else if c.cfgFile != "" {
 		// Use config file from the flag.
 		viper.SetConfigFile(c.cfgFile)
 	} else {
