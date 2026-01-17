@@ -41,12 +41,18 @@ go install github.com/idebeijer/kubert@latest
 
 ## Quick Start
 
-Configure `kubert` to find your kubeconfigs by creating `~/.config/kubert/config.yaml` with the following content:
+By default, `kubert` searches for kubeconfigs in:
+
+- `~/.kube/config`
+- `~/.kube/*.yml`
+- `~/.kube/*.yaml`
+
+If your config files are in these locations, you don't need any additional configuration. To scan other directories, create `~/.config/kubert/config.yaml`:
 
 ```yaml
 kubeconfigs:
   include:
-    - "~/.kube/**"
+    - "~/custom/k8s/configs/*"
 ```
 
 > Tip: install [`fzf`](https://github.com/junegunn/fzf) to pick contexts and namespaces interactively. Without it, kubert prints the available options so you can copy/paste.
@@ -90,43 +96,6 @@ kubert kubeconfig list
 | `kubert context-protection <subcommand>` | Manage protection status                            | `protect`, `unprotect`, `delete`, and `info` operate on the active context        |
 | `kubert which <ctx\|ns\|config>`         | Print the active context, namespace, or config path | Handy for scripts/prompts                                                         |
 | `kubert kubeconfig list`                 | List kubeconfig files kubert will scan              | Respects include/exclude settings                                                 |
-
-## Context Protection
-
-> [!WARNING]  
-> Context protection works only when you run `kubectl` through `kubert kubectl`. It does not modify your existing `kubectl` binary or configuration.
-> You might want to alias it for convenience, e.g., `alias k=kubert kubectl`.
-
-Context protection ensures destructive commands can’t hit sensitive clusters by accident. Protection is only enforced when you run `kubectl` through `kubert kubectl` (consider aliasing `k=kubert kubectl`).
-
-### Pattern-based defaults
-
-Add a regular expression to your config to protect any context whose name matches:
-
-```yaml
-contexts:
-  protectedByDefaultRegexp: "(prd|prod)"
-  protectedKubectlCommands:
-    - delete
-    - apply
-    - scale
-```
-
-- Omit or set the value to `null` to disable automatic protection.
-- Use an empty string (`""`) to protect every context by default.
-
-### Explicit overrides
-
-Use the CLI when you want to mark a specific context as protected or unprotected regardless of the regex:
-
-```sh
-kubert context-protection protect   # enforce protection
-kubert context-protection unprotect # lift protection
-kubert context-protection delete    # remove explicit override and fall back to regex/default
-kubert context-protection info      # show the current protection status
-```
-
-When a protected context sees a protected command, kubert will either exit immediately (`contexts.exitOnProtectedKubectlCmd: true`) or prompt for confirmation.
 
 ## Configuration
 
@@ -189,3 +158,40 @@ hooks:
   preShell: 'echo "\033]0;k8s: $KUBERT_CONTEXT\007"'
   postShell: 'echo "\033]0;\007"'
 ```
+
+## Context Protection
+
+> [!WARNING]  
+> Context protection works only when you run `kubectl` through `kubert kubectl`. It does not modify your existing `kubectl` binary or configuration.
+> You might want to alias it for convenience, e.g., `alias k=kubert kubectl`.
+
+Context protection ensures destructive commands can’t hit sensitive clusters by accident. Protection is only enforced when you run `kubectl` through `kubert kubectl` (consider aliasing `k=kubert kubectl`).
+
+### Pattern-based defaults
+
+Add a regular expression to your config to protect any context whose name matches:
+
+```yaml
+contexts:
+  protectedByDefaultRegexp: "(prd|prod)"
+  protectedKubectlCommands:
+    - delete
+    - apply
+    - scale
+```
+
+- Omit or set the value to `null` to disable automatic protection.
+- Use an empty string (`""`) to protect every context by default.
+
+### Explicit overrides
+
+Use the CLI when you want to mark a specific context as protected or unprotected regardless of the regex:
+
+```sh
+kubert context-protection protect   # enforce protection
+kubert context-protection unprotect # lift protection
+kubert context-protection delete    # remove explicit override and fall back to regex/default
+kubert context-protection info      # show the current protection status
+```
+
+When a protected context sees a protected command, kubert will either exit immediately (`contexts.exitOnProtectedKubectlCmd: true`) or prompt for confirmation.
