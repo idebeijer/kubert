@@ -33,7 +33,18 @@
 brew install idebeijer/tap/kubert --cask
 ```
 
-### From source
+### Bash script (Linux & macOS)
+
+Installs the latest binary from GitHub Releases.
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/idebeijer/kubert/main/scripts/install.sh | bash
+
+# Install to a custom directory (e.g., ~/.local/bin)
+curl -fsSL https://raw.githubusercontent.com/idebeijer/kubert/main/scripts/install.sh | bash -s -- ~/.local/bin
+```
+
+### From source with Go
 
 ```sh
 go install github.com/idebeijer/kubert@latest
@@ -41,7 +52,24 @@ go install github.com/idebeijer/kubert@latest
 
 ### Shell Completion
 
-If you installed via Homebrew, completions are usually installed automatically. To configure your shell to load them, see [Homebrew's Shell Completion docs](https://docs.brew.sh/Shell-Completion). Completions are also available through `kubert completion <shell>`.
+If you installed via Homebrew, completions are usually installed automatically. See [Homebrew's Shell Completion docs](https://docs.brew.sh/Shell-Completion).
+
+<details>
+<summary>Manual completion script installation</summary>
+For manual installation, add the following to your shell config (e.g., `~/.bashrc`, `~/.zshrc`):
+
+```sh
+# Bash
+source <(kubert completion bash)
+
+# Zsh
+source <(kubert completion zsh)
+
+# Fish
+kubert completion fish | source
+```
+
+</details>
 
 ## Quick Start
 
