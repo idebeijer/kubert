@@ -76,4 +76,4 @@ changelog:
   filters:
     exclude:
       - '^.*?(test|style)(\(.+\))??!?:.+$'
-      - 'initial commit'
+      - "initial commit"
