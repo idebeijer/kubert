@@ -206,8 +206,8 @@ func launchShellWithKubeconfig(kubeconfigPath, originalKubeconfigPath, contextNa
 	if err := os.Setenv(kubert.ShellOriginalKubeconfigEnvVar, originalKubeconfigPath); err != nil {
 		return fmt.Errorf("failed to set KUBERT_SHELL_ORIGINAL_KUBECONFIG environment variable: %w", err)
 	}
-	if err := os.Setenv("KUBERT_CONTEXT", contextName); err != nil {
-		return fmt.Errorf("failed to set KUBERT_CONTEXT environment variable: %w", err)
+	if err := os.Setenv(kubert.ShellContextEnvVar, contextName); err != nil {
+		return fmt.Errorf("failed to set KUBERT_SHELL_CONTEXT environment variable: %w", err)
 	}
 
 	statefile, _ := state.FilePath()

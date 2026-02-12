@@ -17,6 +17,9 @@ const (
 
 	// ShellOriginalKubeconfigEnvVar is the environment variable that is set to the path of the original kubeconfig file.
 	ShellOriginalKubeconfigEnvVar = "KUBERT_SHELL_ORIGINAL_KUBECONFIG"
+
+	// ShellContextEnvVar is the environment variable that is set to the context name.
+	ShellContextEnvVar = "KUBERT_SHELL_CONTEXT"
 )
 
 // ShellPreFlightCheck checks if the shell was started by Kubert and if the kubeconfig file is the same as the one set by Kubert.

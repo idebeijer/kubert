@@ -202,7 +202,7 @@ Name shell tab after selected Kubernetes context:
 
 ```yaml
 hooks:
-  preShell: 'echo "\033]0;k8s: $KUBERT_CONTEXT\007"'
+  preShell: 'echo "\033]0;k8s: $KUBERT_SHELL_CONTEXT\007"'
   postShell: 'echo "\033]0;\007"'
 ```
 
