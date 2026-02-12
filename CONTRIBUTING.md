@@ -33,6 +33,8 @@ You can use `make` to run common tasks:
 make lint
 make test
 make build
+# Build a snapshot release locally with goreleaser at ./dist (does not publish)
+make goreleaser-release-snapshot
 ```
 
 4. **Update Documentation**

@@ -48,6 +48,10 @@ build: fmt vet ## Build the binary
 run: fmt vet ## Run the binary
 	go run main.go $(ARGS)
 
+.PHONY: goreleaser-release-snapshot
+goreleaser-release-snapshot: ## Build a snapshot release locally with goreleaser at ./dist (does not publish).
+	goreleaser release --snapshot --clean
+
 ##@ Utils
 
 .PHONY: docs

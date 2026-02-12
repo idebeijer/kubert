@@ -22,7 +22,7 @@ builds:
       - "-s"
       - "-w"
       - "-X github.com/idebeijer/kubert/pkg/versions.Version={{ .Version }}"
-      - "-X github.com/idebeijer/kubert/pkg/versions.Commit={{ .ShortCommit }}"
+      - "-X github.com/idebeijer/kubert/pkg/versions.Commit={{ .Commit }}"
       - "-X github.com/idebeijer/kubert/pkg/versions.Date={{ .Date }}"
       - "-X github.com/idebeijer/kubert/pkg/versions.BuiltBy=goreleaser"
 
