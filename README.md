@@ -131,6 +131,8 @@ kubert kubeconfig list
 | `kubert which <ctx\|ns\|config>`        | Print the active context, namespace, or config path | Handy for scripts/prompts                                                         |
 | `kubert kubeconfig list`                | List kubeconfig files kubert will scan              | Respects include/exclude settings                                                 |
 
+For more information on all commands, see the [docs](docs/README.md).
+
 ## Configuration
 
 kubert reads from `~/.config/kubert/config.yaml`. You can override this location using the `KUBERT_CONFIG` environment variable or the `--config <path>` flag.
@@ -290,3 +292,7 @@ kubert protection remove    # remove explicit override, fall back to default reg
 ```
 
 When a protected context sees a protected command, kubert will prompt for confirmation (`prompt: true`) or exit immediately (`prompt: false`).
+
+## Contributing
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for information on how to contribute to `kubert`.
