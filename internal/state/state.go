@@ -31,7 +31,7 @@ type Manager struct {
 
 func NewManager() (*Manager, error) {
 	dataDir := filepath.Join(xdg.DataHome, appName)
-	if err := os.MkdirAll(dataDir, 0o755); err != nil {
+	if err := os.MkdirAll(dataDir, 0o700); err != nil {
 		return nil, err
 	}
 
@@ -142,5 +142,5 @@ func (m *Manager) saveState() error {
 		return fmt.Errorf("failed to marshal state: %w", err)
 	}
 
-	return os.WriteFile(m.filename, data, 0o644)
+	return os.WriteFile(m.filename, data, 0o600)
 }
