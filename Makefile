@@ -54,7 +54,7 @@ run: fmt vet ## Run the binary
 
 .PHONY: goreleaser-release-snapshot
 goreleaser-release-snapshot: ## Build a snapshot release locally with goreleaser at ./dist (does not publish).
-	goreleaser release --snapshot --clean
+	goreleaser release --snapshot --clean --skip=sign
 
 ##@ Utils
 
