@@ -38,6 +38,10 @@ lint: ## Run golangci-lint against code
 lint-fix: ## Run golangci-lint against code and fix issues
 	golangci-lint run --fix
 
+.PHONY: vulncheck
+vulncheck: ## Run govulncheck against code
+	go tool govulncheck ./...
+
 ##@ Build
 
 .PHONY: build
