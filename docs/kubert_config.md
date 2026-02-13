@@ -1,11 +1,15 @@
-## kubert kubeconfig
+## kubert config
 
-Kubeconfig command
+Manage kubert configuration
+
+### Synopsis
+
+Manage kubert configuration file.
 
 ### Options
 
 ```
-  -h, --help   help for kubeconfig
+  -h, --help   help for config
 ```
 
 ### Options inherited from parent commands
@@ -18,6 +22,5 @@ Kubeconfig command
 ### SEE ALSO
 
 * [kubert](kubert.md)	 - kubert is a tool to switch kubernetes contexts and namespaces
-* [kubert kubeconfig lint](kubert_kubeconfig_lint.md)	 - Lint kubeconfig files for errors and issues
-* [kubert kubeconfig list](kubert_kubeconfig_list.md)	 - 
+* [kubert config edit](kubert_config_edit.md)	 - Edit the kubert config file in vim
 

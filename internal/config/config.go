@@ -1,18 +1,22 @@
 package config
 
 import (
+	"bytes"
 	"fmt"
 
 	"github.com/spf13/viper"
 	"go.yaml.in/yaml/v4"
 )
 
-var Cfg Config
+var (
+	Cfg        Config // Global 'current' config
+	DefaultCfg Config // Pure default config, captured before reading any config file
+)
 
 type Config struct {
 	KubeconfigPaths KubeconfigPaths `mapstructure:"kubeconfigs" yaml:"kubeconfigs"`
 	// Deprecated: use Interactive instead.
-	InteractiveShellMode bool       `mapstructure:"interactiveShellMode" yaml:"interactiveShellMode"`
+	InteractiveShellMode bool       `mapstructure:"interactiveShellMode" yaml:"interactiveShellMode,omitempty"`
 	Interactive          bool       `mapstructure:"interactive" yaml:"interactive"`
 	Protection           Protection `mapstructure:"protection" yaml:"protection"`
 	Hooks                Hooks      `mapstructure:"hooks" yaml:"hooks"`
@@ -57,14 +61,13 @@ type Fzf struct {
 	Opts string `mapstructure:"opts" yaml:"opts"`
 }
 
-func init() {
+func setDefaults() {
 	viper.SetDefault("kubeconfigs.include", []string{
 		"~/.kube/config",
 		"~/.kube/*.yml",
 		"~/.kube/*.yaml",
 	})
 	viper.SetDefault("kubeconfigs.exclude", []string{})
-	viper.SetDefault("interactiveShellMode", true)
 	viper.SetDefault("interactive", true)
 	viper.SetDefault("protection.regex", nil)
 	viper.SetDefault("protection.commands", []string{
@@ -85,16 +88,28 @@ func init() {
 	viper.SetDefault("fzf.opts", "")
 }
 
-func GenerateDefaultYAML() (string, error) {
-	if err := viper.Unmarshal(&Cfg); err != nil {
-		return "", fmt.Errorf("unable to unmarshal config: %w", err)
-	}
+func init() {
+	setDefaults()
 
-	// Marshal the Config struct into YAML
-	yamlData, err := yaml.Marshal(&Cfg)
-	if err != nil {
+	// Capture the pure defaults immediately into DefaultCfg
+	if err := viper.Unmarshal(&DefaultCfg); err != nil {
+		panic(fmt.Errorf("failed to capture default config: %w", err))
+	}
+}
+
+// GenerateDefaultYAML returns the default configuration as a YAML string, without any user overrides.
+func GenerateDefaultYAML() (string, error) {
+	var buf bytes.Buffer
+	encoder := yaml.NewEncoder(&buf)
+	encoder.SetIndent(2)
+
+	if err := encoder.Encode(&DefaultCfg); err != nil {
 		return "", fmt.Errorf("unable to marshal config to YAML: %w", err)
 	}
 
-	return string(yamlData), nil
+	if err := encoder.Close(); err != nil {
+		return "", fmt.Errorf("unable to close YAML encoder: %w", err)
+	}
+
+	return buf.String(), nil
 }

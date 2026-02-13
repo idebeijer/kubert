@@ -2,7 +2,7 @@
 BINARY ?= kubert
 
 .PHONY: all
-all: build
+all: build lint
 
 .PHONY: help
 help: ## Display this help.

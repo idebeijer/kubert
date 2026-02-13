@@ -16,6 +16,7 @@ func NewCommand() *cobra.Command {
 	initFlags(cmd)
 
 	cmd.AddCommand(NewListCommand())
+	cmd.AddCommand(newLintCommand())
 
 	return cmd
 }

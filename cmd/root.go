@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"fmt"
 	"log/slog"
 	"os"
 	"path/filepath"
@@ -10,6 +11,7 @@ import (
 	"github.com/spf13/viper"
 	_ "k8s.io/client-go/plugin/pkg/client/auth"
 
+	configcmd "github.com/idebeijer/kubert/cmd/config"
 	"github.com/idebeijer/kubert/cmd/kubeconfig"
 	"github.com/idebeijer/kubert/cmd/protection"
 	"github.com/idebeijer/kubert/cmd/which"
@@ -58,6 +60,7 @@ func (c *RootCmd) initFlags() {
 }
 
 func (c *RootCmd) addCommands() {
+	c.AddCommand(configcmd.NewCommand())
 	c.AddCommand(kubeconfig.NewCommand())
 	c.AddCommand(protection.NewCommand())
 	c.AddCommand(NewContextCommand())
@@ -92,8 +95,31 @@ func (c *RootCmd) initConfig() {
 	viper.AutomaticEnv()
 
 	// Read config file if it exists
-	_ = viper.ReadInConfig()
-	_ = viper.Unmarshal(&config.Cfg)
+	if err := viper.ReadInConfig(); err != nil {
+		if _, ok := err.(viper.ConfigFileNotFoundError); ok {
+			// Config file not found
+		} else {
+			slog.Error("Failed to read config file", "error", err)
+			os.Exit(1)
+		}
+	} else {
+		// Config loaded successfully
+		slog.Debug("Using config file", "file", viper.ConfigFileUsed())
+	}
+
+	// Check if deprecated key was provided
+	if viper.IsSet("interactiveShellMode") {
+		fmt.Println("WARNING: 'interactiveShellMode' is deprecated. Please update your config to use 'interactive' instead.")
+
+		// Map the old value to the new key
+		viper.Set("interactive", viper.GetBool("interactiveShellMode"))
+	}
+
+	// Unmarshal config into struct
+	if err := viper.Unmarshal(&config.Cfg); err != nil {
+		slog.Error("Unable to decode config file", "error", err)
+		os.Exit(1)
+	}
 
 	if viper.GetBool("debug") {
 		level = slog.LevelDebug
