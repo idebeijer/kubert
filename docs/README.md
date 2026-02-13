@@ -24,6 +24,7 @@ Keep in mind, this will only work when using kubectl through the "kubert kubectl
 
 ### SEE ALSO
 
+* [kubert config](kubert_config.md)	 - Manage kubert configuration
 * [kubert ctx](kubert_ctx.md)	 - Spawn a shell with the selected context
 * [kubert exec](kubert_exec.md)	 - Execute a command against multiple contexts
 * [kubert kubeconfig](kubert_kubeconfig.md)	 - Kubeconfig command
