@@ -13,7 +13,8 @@ kubert config edit [flags]
 ### Options
 
 ```
-  -h, --help   help for edit
+      --create   create a new config file at $HOME/.config/kubert/config.yaml with default settings
+  -h, --help     help for edit
 ```
 
 ### Options inherited from parent commands
