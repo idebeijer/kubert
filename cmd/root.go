@@ -10,6 +10,7 @@ import (
 	"github.com/spf13/viper"
 	_ "k8s.io/client-go/plugin/pkg/client/auth"
 
+	configcmd "github.com/idebeijer/kubert/cmd/config"
 	"github.com/idebeijer/kubert/cmd/kubeconfig"
 	"github.com/idebeijer/kubert/cmd/protection"
 	"github.com/idebeijer/kubert/cmd/which"
@@ -58,6 +59,7 @@ func (c *RootCmd) initFlags() {
 }
 
 func (c *RootCmd) addCommands() {
+	c.AddCommand(configcmd.NewCommand())
 	c.AddCommand(kubeconfig.NewCommand())
 	c.AddCommand(protection.NewCommand())
 	c.AddCommand(NewContextCommand())
