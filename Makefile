@@ -38,6 +38,10 @@ lint: ## Run golangci-lint against code
 lint-fix: ## Run golangci-lint against code and fix issues
 	golangci-lint run --fix
 
+.PHONY: vulncheck
+vulncheck: ## Run govulncheck against code
+	go tool govulncheck ./...
+
 ##@ Build
 
 .PHONY: build
@@ -50,7 +54,7 @@ run: fmt vet ## Run the binary
 
 .PHONY: goreleaser-release-snapshot
 goreleaser-release-snapshot: ## Build a snapshot release locally with goreleaser at ./dist (does not publish).
-	goreleaser release --snapshot --clean
+	goreleaser release --snapshot --clean --skip=sign
 
 ##@ Utils
 

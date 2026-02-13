@@ -48,6 +48,18 @@ homebrew_casks:
             system_command "/usr/bin/xattr", args: ["-dr", "com.apple.quarantine", "#{staged_path}/kubert"]
           end
 
+signs:
+  - id: cosign
+    cmd: cosign
+    signature: "${artifact}.sigstore.json"
+    args:
+      - sign-blob
+      - "--bundle=${signature}"
+      - "${artifact}"
+      - "--yes"
+    artifacts: checksum
+    output: true
+
 release:
   footer: |
     **Full Changelog**: https://github.com/idebeijer/kubert/compare/{{ .PreviousTag }}...{{ .Tag }}
