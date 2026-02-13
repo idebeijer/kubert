@@ -8,6 +8,8 @@ import (
 
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
+
+	"github.com/idebeijer/kubert/internal/config"
 )
 
 func NewEditCommand() *cobra.Command {
@@ -29,18 +31,20 @@ func NewEditCommand() *cobra.Command {
 				configDir := filepath.Join(home, ".config", "kubert")
 				configFile = filepath.Join(configDir, "config.yaml")
 
-				// Check if file already exists
 				if _, err := os.Stat(configFile); err == nil {
 					return fmt.Errorf("config file already exists at %s", configFile)
 				}
 
-				// Create the kubert directory if it doesn't exist
 				if err := os.MkdirAll(configDir, 0o700); err != nil {
 					return fmt.Errorf("failed to create config directory: %w", err)
 				}
 
-				// Create empty config file TODO: maybe add default config?
-				if err := os.WriteFile(configFile, []byte{}, 0o600); err != nil {
+				defaultConfig, err := config.GenerateDefaultYAML()
+				if err != nil {
+					return fmt.Errorf("failed to generate default config: %w", err)
+				}
+
+				if err := os.WriteFile(configFile, []byte(defaultConfig), 0o600); err != nil {
 					return fmt.Errorf("failed to write config file: %w", err)
 				}
 
@@ -65,7 +69,7 @@ func NewEditCommand() *cobra.Command {
 		},
 	}
 
-	cmd.Flags().BoolVar(&create, "create", false, "Create a new config file at $HOME/.config/kubert/config.yaml")
+	cmd.Flags().BoolVar(&create, "create", false, "create a new config file at $HOME/.config/kubert/config.yaml with default settings")
 
 	return cmd
 }
