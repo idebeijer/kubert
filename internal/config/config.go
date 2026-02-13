@@ -10,11 +10,13 @@ import (
 var Cfg Config
 
 type Config struct {
-	KubeconfigPaths      KubeconfigPaths `mapstructure:"kubeconfigs" yaml:"kubeconfigs"`
-	InteractiveShellMode bool            `mapstructure:"interactiveShellMode" yaml:"interactiveShellMode"`
-	Protection           Protection      `mapstructure:"protection" yaml:"protection"`
-	Hooks                Hooks           `mapstructure:"hooks" yaml:"hooks"`
-	Fzf                  Fzf             `mapstructure:"fzf" yaml:"fzf"`
+	KubeconfigPaths KubeconfigPaths `mapstructure:"kubeconfigs" yaml:"kubeconfigs"`
+	// Deprecated: use Interactive instead.
+	InteractiveShellMode bool       `mapstructure:"interactiveShellMode" yaml:"interactiveShellMode"`
+	Interactive          bool       `mapstructure:"interactive" yaml:"interactive"`
+	Protection           Protection `mapstructure:"protection" yaml:"protection"`
+	Hooks                Hooks      `mapstructure:"hooks" yaml:"hooks"`
+	Fzf                  Fzf        `mapstructure:"fzf" yaml:"fzf"`
 }
 
 type KubeconfigPaths struct {
@@ -63,6 +65,7 @@ func init() {
 	})
 	viper.SetDefault("kubeconfigs.exclude", []string{})
 	viper.SetDefault("interactiveShellMode", true)
+	viper.SetDefault("interactive", true)
 	viper.SetDefault("protection.regex", nil)
 	viper.SetDefault("protection.commands", []string{
 		"delete",

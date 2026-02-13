@@ -138,14 +138,23 @@ For more information on all commands, see the [docs](docs/README.md).
 kubert reads from `~/.config/kubert/config.yaml`. You can override this location using the `KUBERT_CONFIG` environment variable or the `--config <path>` flag.
 
 ```yaml
-# All settings shown with their defaults
+# All settings shown with their defaults.
+
+# Paths to kubeconfig files. Supports glob patterns.
 kubeconfigs:
   include:
     - "~/.kube/config"
     - "~/.kube/*.yml"
     - "~/.kube/*.yaml"
+
+  # Exclude these patterns. (takes precedence over include)
   exclude: []
 
+# Use `fzf` for interactive context/namespace selection when available.
+# If `fzf` is not found, kubert falls back to a non-interactive list.
+interactive: true
+
+# Protect contexts against accidental destructive commands. See "Context Protection" below for details. (not configured by default)
 protection:
   regex: null # regex pattern to auto-protect matching contexts (e.g., "(prod|prd)")
   commands: # kubectl commands to block in protected contexts

@@ -1,6 +1,7 @@
 package fzf
 
 import (
+	"fmt"
 	"os"
 	"os/exec"
 	"slices"
@@ -11,7 +12,11 @@ import (
 
 func IsInteractiveShell() bool {
 	cfg := config.Cfg
-	if !cfg.InteractiveShellMode {
+	if !cfg.Interactive || !cfg.InteractiveShellMode {
+		if !cfg.InteractiveShellMode {
+			fmt.Println("Warning: interactiveShellMode is deprecated, please use interactive instead.")
+		}
+
 		return false
 	}
 	_, err := exec.LookPath("fzf")
