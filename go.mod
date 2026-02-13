@@ -8,7 +8,7 @@ require (
 	github.com/gofrs/flock v0.13.0
 	github.com/spf13/cobra v1.10.2
 	github.com/spf13/viper v1.21.0
-	gopkg.in/yaml.v3 v3.0.1
+	go.yaml.in/yaml/v4 v4.0.0-rc.4
 	k8s.io/apimachinery v0.35.1
 	k8s.io/client-go v0.35.1
 )
@@ -60,6 +60,7 @@ require (
 	google.golang.org/protobuf v1.36.8 // indirect
 	gopkg.in/evanphx/json-patch.v4 v4.13.0 // indirect
 	gopkg.in/inf.v0 v0.9.1 // indirect
+	gopkg.in/yaml.v3 v3.0.1 // indirect
 	k8s.io/api v0.35.1 // indirect
 	k8s.io/klog/v2 v2.130.1 // indirect
 	k8s.io/kube-openapi v0.0.0-20250910181357-589584f1c912 // indirect

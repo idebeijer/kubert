@@ -12,8 +12,8 @@ import (
 
 func IsInteractiveShell() bool {
 	cfg := config.Cfg
-	if !cfg.Interactive || !cfg.InteractiveShellMode {
-		if !cfg.InteractiveShellMode {
+	if !cfg.Interactive || !cfg.InteractiveShellMode { //nolint:staticcheck
+		if !cfg.InteractiveShellMode { //nolint:staticcheck
 			fmt.Println("Warning: interactiveShellMode is deprecated, please use interactive instead.")
 		}
 
