@@ -14,16 +14,16 @@
 
 ## Overview
 
-`kubert` lets you hop between Kubernetes contexts and namespaces inside dedicated subshells. Each shell gets its own kubeconfig copy so you can keep production, staging, and local sessions open side-by-side without collisions. On top of that, kubert offers guard rails (context protection), multi-context execution, and shell hooks to give you a contextual workflow similar to `kubectx`, `kubens`, and [kubie](https://github.com/sbstp/kubie) in one tool.
+`kubert` lets you hop between Kubernetes contexts and namespaces inside dedicated subshells. Each shell gets its own kubeconfig copy so you can keep production, staging, and local sessions open side-by-side without collisions. On top of that, kubert offers optional guard rails (context protection), multi-context execution, and shell hooks to give you a contextual workflow similar to `kubectx`, `kubens`, and [kubie](https://github.com/sbstp/kubie) in one tool.
 
 ## Features
 
 - **Context isolation**: spawn shells with temporary kubeconfig files so contexts never bleed into other terminals.
 - **Namespace management**: switch namespaces within an active kubert shell without touching other sessions.
-- **Context protection**: block (or confirm) risky `kubectl` commands in sensitive contexts.
+- **Context protection**: block (or confirm) risky `kubectl` commands in sensitive contexts. (optional, not enabled by default)
 - **Multi-context fan-out**: run a command across many contexts with glob or regex selection.
 - **Interactive selection**: opt into fuzzy selection with `fzf` or list contexts/namespaces in non-interactive environments.
-- **Shell hooks**: run pre/post shell commands to tweak prompts, set tab titles, or log usage.
+- **Shell hooks**: run pre/post shell commands to e.g. set tab titles, or log usage.
 
 ## Installation
 
@@ -106,7 +106,7 @@ kubert exec "prod-*" "staging-?" -- kubectl get nodes
 kubert exec --regex "^(dev|qa)-.*" -- kubectl get pods
 kubert exec --parallel --dry-run "prod-*" -- kubectl rollout status
 
-# Manage context protection
+# Manage context protection (optional, no protection by default)
 kubert protection info      # show current protection status
 kubert protection protect   # explicitly protect current context (overrides default regex)
 kubert protection unprotect # explicitly unprotect current context (overrides default regex)
