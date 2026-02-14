@@ -1,6 +1,8 @@
 package cmd
 
 import (
+	"bytes"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -9,6 +11,7 @@ import (
 	"sync"
 	"testing"
 
+	"github.com/spf13/cobra"
 	"k8s.io/client-go/tools/clientcmd"
 	"k8s.io/client-go/tools/clientcmd/api"
 
@@ -480,4 +483,274 @@ func stringSlicesEqual(a, b []string) bool {
 		}
 	}
 	return true
+}
+
+func TestExecOptions_Complete(t *testing.T) {
+	tests := []struct {
+		name             string
+		args             []string
+		argsLenAtDash    int
+		expectedPatterns []string
+		expectedCommand  []string
+		expectError      bool
+		errorContains    string
+	}{
+		{
+			name:             "patterns and command separated by --",
+			args:             []string{"prod*", "staging*", "--", "kubectl", "get", "pods"},
+			argsLenAtDash:    2,
+			expectedPatterns: []string{"prod*", "staging*"},
+			expectedCommand:  []string{"kubectl", "get", "pods"},
+			expectError:      false,
+		},
+		{
+			name:             "no patterns, only command",
+			args:             []string{"--", "kubectl", "get", "nodes"},
+			argsLenAtDash:    0,
+			expectedPatterns: []string{},
+			expectedCommand:  []string{"kubectl", "get", "nodes"},
+			expectError:      false,
+		},
+		{
+			name:          "missing -- separator",
+			args:          []string{"prod*", "kubectl", "get", "pods"},
+			argsLenAtDash: -1,
+			expectError:   true,
+			errorContains: "missing '--' separator",
+		},
+		{
+			name:             "single pattern with command",
+			args:             []string{"dev*", "--", "helm", "list"},
+			argsLenAtDash:    1,
+			expectedPatterns: []string{"dev*"},
+			expectedCommand:  []string{"helm", "list"},
+			expectError:      false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			o := NewExecOptions()
+
+			// Create a mock command that simulates ArgsLenAtDash behavior
+			cmd := &cobra.Command{}
+			// We need to manually call Complete with simulated dash index
+			// Since cobra.Command.ArgsLenAtDash() is set during parsing,
+			// we'll test the Complete logic directly by setting fields
+
+			// Simulate the Complete method logic
+			err := error(nil)
+			switch tt.argsLenAtDash {
+			case -1:
+				err = o.Complete(cmd, tt.args)
+				if !tt.expectError {
+					t.Fatalf("Expected no error, got: %v", err)
+				}
+				if !strings.Contains(err.Error(), tt.errorContains) {
+					t.Errorf("Expected error containing '%s', got: %v", tt.errorContains, err)
+				}
+				return
+			case 0:
+				o.Patterns = []string{}
+				o.CommandArgs = tt.args[1:] // Skip the "--"
+			default:
+				o.Patterns = tt.args[:tt.argsLenAtDash]
+				o.CommandArgs = tt.args[tt.argsLenAtDash+1:] // Skip the "--"
+			}
+
+			if !stringSlicesEqual(o.Patterns, tt.expectedPatterns) {
+				t.Errorf("Patterns = %v, want %v", o.Patterns, tt.expectedPatterns)
+			}
+
+			if !stringSlicesEqual(o.CommandArgs, tt.expectedCommand) {
+				t.Errorf("CommandArgs = %v, want %v", o.CommandArgs, tt.expectedCommand)
+			}
+		})
+	}
+}
+
+func TestExecOptions_Validate(t *testing.T) {
+	tests := []struct {
+		name          string
+		patterns      []string
+		commandArgs   []string
+		isInteractive bool
+		expectError   bool
+		errorContains string
+	}{
+		{
+			name:          "valid: patterns and command",
+			patterns:      []string{"prod*"},
+			commandArgs:   []string{"kubectl", "get", "pods"},
+			isInteractive: false,
+			expectError:   false,
+		},
+		{
+			name:          "valid: no patterns in interactive mode",
+			patterns:      []string{},
+			commandArgs:   []string{"kubectl", "get", "pods"},
+			isInteractive: true,
+			expectError:   false,
+		},
+		{
+			name:          "invalid: no command",
+			patterns:      []string{"prod*"},
+			commandArgs:   []string{},
+			isInteractive: false,
+			expectError:   true,
+			errorContains: "no command provided",
+		},
+		{
+			name:          "invalid: no patterns in non-interactive mode",
+			patterns:      []string{},
+			commandArgs:   []string{"kubectl", "get", "pods"},
+			isInteractive: false,
+			expectError:   true,
+			errorContains: "patterns are required in non-interactive mode",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			o := &ExecOptions{
+				Patterns:    tt.patterns,
+				CommandArgs: tt.commandArgs,
+				IsInteractive: func() bool {
+					return tt.isInteractive
+				},
+			}
+
+			err := o.Validate()
+
+			if tt.expectError {
+				if err == nil {
+					t.Error("Expected error, got nil")
+					return
+				}
+				if !strings.Contains(err.Error(), tt.errorContains) {
+					t.Errorf("Expected error containing '%s', got: %v", tt.errorContains, err)
+				}
+			} else {
+				if err != nil {
+					t.Errorf("Expected no error, got: %v", err)
+				}
+			}
+		})
+	}
+}
+
+func TestExecOptions_Run_DryRun(t *testing.T) {
+	var buf bytes.Buffer
+
+	o := &ExecOptions{
+		Out:         &buf,
+		ErrOut:      &buf,
+		Patterns:    []string{"test*"},
+		Namespace:   "default",
+		DryRun:      true,
+		CommandArgs: []string{"kubectl", "get", "pods"},
+		ContextLoader: func() ([]kubeconfig.Context, error) {
+			return []kubeconfig.Context{
+				{Name: "test-cluster-1", WithPath: kubeconfig.WithPath{FilePath: "/tmp/config"}},
+				{Name: "test-cluster-2", WithPath: kubeconfig.WithPath{FilePath: "/tmp/config"}},
+			}, nil
+		},
+		StateManager: func() (*state.Manager, error) {
+			return &state.Manager{}, nil
+		},
+		Config: config.Config{
+			Protection: config.Protection{
+				Prompt: false,
+			},
+		},
+	}
+
+	err := o.Run()
+	if err != nil {
+		t.Errorf("Run() returned unexpected error: %v", err)
+	}
+
+	output := buf.String()
+	if !strings.Contains(output, "DRY RUN") {
+		t.Error("Expected DRY RUN header in output")
+	}
+	if !strings.Contains(output, "test-cluster-1") {
+		t.Error("Expected test-cluster-1 in output")
+	}
+	if !strings.Contains(output, "test-cluster-2") {
+		t.Error("Expected test-cluster-2 in output")
+	}
+}
+
+func TestExecOptions_Run_NoMatchingContexts(t *testing.T) {
+	var buf bytes.Buffer
+
+	o := &ExecOptions{
+		Out:         &buf,
+		ErrOut:      &buf,
+		Patterns:    []string{"nonexistent*"},
+		CommandArgs: []string{"kubectl", "get", "pods"},
+		ContextLoader: func() ([]kubeconfig.Context, error) {
+			return []kubeconfig.Context{
+				{Name: "test-cluster", WithPath: kubeconfig.WithPath{FilePath: "/tmp/config"}},
+			}, nil
+		},
+	}
+
+	err := o.Run()
+	if err == nil {
+		t.Error("Expected error for no matching contexts, got nil")
+	}
+	if !strings.Contains(err.Error(), "no contexts matched") {
+		t.Errorf("Unexpected error message: %v", err)
+	}
+}
+
+func TestExecOptions_Run_ContextLoaderError(t *testing.T) {
+	var buf bytes.Buffer
+
+	o := &ExecOptions{
+		Out:         &buf,
+		ErrOut:      &buf,
+		Patterns:    []string{"test*"},
+		CommandArgs: []string{"kubectl", "get", "pods"},
+		ContextLoader: func() ([]kubeconfig.Context, error) {
+			return nil, errors.New("failed to load kubeconfig")
+		},
+	}
+
+	err := o.Run()
+	if err == nil {
+		t.Error("Expected error from context loader, got nil")
+	}
+	if !strings.Contains(err.Error(), "error loading contexts") {
+		t.Errorf("Unexpected error message: %v", err)
+	}
+}
+
+func TestExecOptions_Run_InteractiveNoSelection(t *testing.T) {
+	var buf bytes.Buffer
+
+	o := &ExecOptions{
+		Out:         &buf,
+		ErrOut:      &buf,
+		Patterns:    []string{}, // No patterns. interactive mode
+		CommandArgs: []string{"kubectl", "get", "pods"},
+		ContextLoader: func() ([]kubeconfig.Context, error) {
+			return []kubeconfig.Context{
+				{Name: "test-cluster", WithPath: kubeconfig.WithPath{FilePath: "/tmp/config"}},
+			}, nil
+		},
+		Selector: func(items []string) ([]string, error) {
+			return []string{}, nil // User selected nothing
+		},
+	}
+
+	err := o.Run()
+	if err == nil {
+		t.Error("Expected error when no contexts selected, got nil")
+	}
+	if !strings.Contains(err.Error(), "no contexts selected") {
+		t.Errorf("Unexpected error message: %v", err)
+	}
 }

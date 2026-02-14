@@ -3,6 +3,7 @@ package cmd
 import (
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"regexp"
@@ -12,6 +13,7 @@ import (
 
 	"github.com/fatih/color"
 	"github.com/spf13/cobra"
+	"k8s.io/client-go/tools/clientcmd/api"
 
 	"github.com/idebeijer/kubert/internal/config"
 	"github.com/idebeijer/kubert/internal/kubert"
@@ -19,7 +21,54 @@ import (
 	"github.com/idebeijer/kubert/internal/util"
 )
 
+type KubectlOptions struct {
+	Out    io.Writer
+	ErrOut io.Writer
+
+	Args []string
+
+	Config             config.Config
+	StateManager       func() (*state.Manager, error)
+	ClientConfigLoader func() (*api.Config, error)
+	CommandRunner      func([]string) error
+	Prompter           func() bool
+}
+
+func NewKubectlOptions() *KubectlOptions {
+	return &KubectlOptions{
+		Out:    os.Stdout,
+		ErrOut: os.Stderr,
+		Config: config.Cfg,
+
+		StateManager: state.NewManager,
+		ClientConfigLoader: func() (*api.Config, error) {
+			clientConfig, err := util.KubeClientConfig()
+			if err != nil {
+				return nil, err
+			}
+			return clientConfig, nil
+		},
+		CommandRunner: func(args []string) error {
+			kubectlCmd := exec.Command("kubectl", args...)
+			kubectlCmd.Stdin = os.Stdin
+			kubectlCmd.Stdout = os.Stdout
+			kubectlCmd.Stderr = os.Stderr
+			if err := kubectlCmd.Run(); err != nil {
+				if _, ok := err.(*exec.ExitError); ok {
+					// Return nil to avoid duplicating the error message given by kubectl
+					return nil
+				}
+				return fmt.Errorf("kubectl error: %w", err)
+			}
+			return nil
+		},
+		Prompter: promptUserConfirmation,
+	}
+}
+
 func NewKubectlCommand() *cobra.Command {
+	o := NewKubectlOptions()
+
 	cmd := &cobra.Command{
 		Use:                "kubectl",
 		Short:              "Wrapper for kubectl",
@@ -37,57 +86,69 @@ func NewKubectlCommand() *cobra.Command {
 		SilenceUsage:      true,
 		ValidArgsFunction: validKubectlArgsFunction,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			cfg := config.Cfg
-
-			sm, err := state.NewManager()
-			if err != nil {
+			if err := o.Complete(cmd, args); err != nil {
 				return err
 			}
-
-			clientConfig, err := util.KubeClientConfig()
-			if err != nil {
+			if err := o.Validate(); err != nil {
 				return err
 			}
-
-			locked, err := isContextProtected(sm, clientConfig.CurrentContext, cfg)
-			if err != nil {
-				return err
-			}
-
-			if locked && isCommandProtected(args, cfg.Protection.Commands) {
-
-				if !cfg.Protection.Prompt {
-					fmt.Printf("You tried to run the protected kubectl command \"%s\" in the protected context \"%s\".\n\n"+
-						"The command has not been executed and kubert will exit immediately.\n"+
-						"Exiting...\n", args[0], clientConfig.CurrentContext)
-					return nil
-				}
-
-				yellow := color.New(color.FgHiYellow).SprintFunc()
-				fmt.Printf("%s: you tried to run the protected kubectl command \"%s\" in the protected context \"%s\".\n\n", yellow("WARNING"), args[0], clientConfig.CurrentContext)
-				if !promptUserConfirmation() {
-					fmt.Println("Exiting...")
-					return nil
-				}
-				fmt.Println()
-			}
-
-			kubectlCmd := exec.Command("kubectl", args...)
-			kubectlCmd.Stdin = os.Stdin
-			kubectlCmd.Stdout = os.Stdout
-			kubectlCmd.Stderr = os.Stderr
-			if err := kubectlCmd.Run(); err != nil {
-				if _, ok := err.(*exec.ExitError); ok {
-					// Return nil to avoid duplicating the error message given by kubectl
-					return nil
-				}
-				return fmt.Errorf("kubectl error: %w", err)
-			}
-			return nil
+			return o.Run()
 		},
 	}
 
 	return cmd
+}
+
+// Complete parses arguments and sets up IO
+func (o *KubectlOptions) Complete(cmd *cobra.Command, args []string) error {
+	o.Out = cmd.OutOrStdout()
+	o.ErrOut = cmd.ErrOrStderr()
+	o.Args = args
+	return nil
+}
+
+// Validate checks that kubectl command can be executed
+func (o *KubectlOptions) Validate() error {
+	return nil
+}
+
+// Run contains the main kubectl wrapper logic
+func (o *KubectlOptions) Run() error {
+	sm, err := o.StateManager()
+	if err != nil {
+		return err
+	}
+
+	clientConfig, err := o.ClientConfigLoader()
+	if err != nil {
+		return err
+	}
+
+	locked, err := isContextProtected(sm, clientConfig.CurrentContext, o.Config)
+	if err != nil {
+		return err
+	}
+
+	if locked && isCommandProtected(o.Args, o.Config.Protection.Commands) {
+		// Protection is active and command is protected
+		if !o.Config.Protection.Prompt {
+			fmt.Fprintf(o.Out, "You tried to run the protected kubectl command \"%s\" in the protected context \"%s\".\n\n"+
+				"The command has not been executed and kubert will exit immediately.\n"+
+				"Exiting...\n", o.Args[0], clientConfig.CurrentContext)
+			return nil
+		}
+
+		yellow := color.New(color.FgHiYellow).SprintFunc()
+		fmt.Fprintf(o.Out, "%s: you tried to run the protected kubectl command \"%s\" in the protected context \"%s\".\n\n",
+			yellow("WARNING"), o.Args[0], clientConfig.CurrentContext)
+		if !o.Prompter() {
+			fmt.Fprintln(o.Out, "Exiting...")
+			return nil
+		}
+		fmt.Fprintln(o.Out)
+	}
+
+	return o.CommandRunner(o.Args)
 }
 
 func promptUserConfirmation() bool {
