@@ -351,14 +351,6 @@ func TestContextOptions_Complete(t *testing.T) {
 	}
 }
 
-func TestContextOptions_Validate(t *testing.T) {
-	o := NewContextOptions()
-	err := o.Validate()
-	if err != nil {
-		t.Errorf("Validate() returned unexpected error: %v", err)
-	}
-}
-
 func TestContextOptions_Run_WithContextName(t *testing.T) {
 	var buf bytes.Buffer
 	shellLauncherCalled := false

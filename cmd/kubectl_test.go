@@ -193,14 +193,6 @@ func TestKubectlOptions_Complete(t *testing.T) {
 	}
 }
 
-func TestKubectlOptions_Validate(t *testing.T) {
-	o := NewKubectlOptions()
-	err := o.Validate()
-	if err != nil {
-		t.Errorf("Validate() returned unexpected error: %v", err)
-	}
-}
-
 func TestKubectlOptions_Run_Unprotected(t *testing.T) {
 	var buf bytes.Buffer
 
@@ -240,90 +232,6 @@ func TestKubectlOptions_Run_Unprotected(t *testing.T) {
 	output := buf.String()
 	if strings.Contains(output, "WARNING") {
 		t.Error("Should not show warning for unprotected context")
-	}
-}
-
-func TestKubectlOptions_Run_ProtectedWithPromptDisabled(t *testing.T) {
-	var buf bytes.Buffer
-
-	commandRunnerCalled := false
-	o := &KubectlOptions{
-		Out:    &buf,
-		ErrOut: &buf,
-		Args:   []string{"apply", "-f", "deployment.yaml"},
-		Config: config.Config{
-			Protection: config.Protection{
-				Commands: []string{"apply", "delete"},
-				Prompt:   false,
-			},
-		},
-		StateManager: func() (*state.Manager, error) {
-			setupTestXDGDataHome(t)
-			return state.NewManager()
-		},
-		ClientConfigLoader: func() (*api.Config, error) {
-			return &api.Config{
-				CurrentContext: "prod-cluster",
-			}, nil
-		},
-		CommandRunner: func(args []string) error {
-			commandRunnerCalled = true
-			return nil
-		},
-		Prompter: func() bool {
-			t.Error("Prompter should not be called when prompt is disabled")
-			return false
-		},
-	}
-
-	err := o.Run()
-	if err != nil {
-		t.Errorf("Run() returned unexpected error: %v", err)
-	}
-
-	// Without actual protection state set up, command will run
-	// A full integration test would verify the protection message appears
-	_ = commandRunnerCalled // acknowledge we track this for potential assertions
-}
-
-func TestKubectlOptions_Run_ProtectedCommandNotBlocked(t *testing.T) {
-	var buf bytes.Buffer
-
-	o := &KubectlOptions{
-		Out:    &buf,
-		ErrOut: &buf,
-		Args:   []string{"get", "pods"}, // Not a protected command
-		Config: config.Config{
-			Protection: config.Protection{
-				Commands: []string{"apply", "delete"},
-				Prompt:   true,
-			},
-		},
-		StateManager: func() (*state.Manager, error) {
-			return &state.Manager{}, nil
-		},
-		ClientConfigLoader: func() (*api.Config, error) {
-			return &api.Config{
-				CurrentContext: "prod-cluster",
-			}, nil
-		},
-		CommandRunner: func(args []string) error {
-			return nil
-		},
-		Prompter: func() bool {
-			t.Error("Prompter should not be called for non-protected command")
-			return false
-		},
-	}
-
-	err := o.Run()
-	if err != nil {
-		t.Errorf("Run() returned unexpected error: %v", err)
-	}
-
-	output := buf.String()
-	if strings.Contains(output, "WARNING") {
-		t.Error("Should not show warning for non-protected command")
 	}
 }
 

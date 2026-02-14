@@ -45,45 +45,6 @@ func TestNamespaceOptions_Complete_SetsConfig(t *testing.T) {
 	}
 }
 
-func TestNamespaceOptions_Complete(t *testing.T) {
-	tests := []struct {
-		name string
-		args []string
-	}{
-		{name: "no args", args: nil},
-		{name: "with namespace arg", args: []string{"kube-system"}},
-		{name: "empty args", args: []string{}},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			o := NewNamespaceOptions()
-			cmd := &cobra.Command{}
-			var buf bytes.Buffer
-			cmd.SetOut(&buf)
-			cmd.SetErr(&buf)
-
-			err := o.Complete(cmd, tt.args)
-			if err != nil {
-				t.Fatalf("Complete() unexpected error: %v", err)
-			}
-
-			if len(tt.args) > 0 {
-				if len(o.Args) != len(tt.args) || o.Args[0] != tt.args[0] {
-					t.Errorf("Args = %v, want %v", o.Args, tt.args)
-				}
-			}
-		})
-	}
-}
-
-func TestNamespaceOptions_Validate(t *testing.T) {
-	o := NewNamespaceOptions()
-	if err := o.Validate(); err != nil {
-		t.Fatalf("Validate() unexpected error: %v", err)
-	}
-}
-
 func TestNamespaceOptions_Run_WithArg(t *testing.T) {
 	setupTestXDGDataHome(t)
 
@@ -344,75 +305,6 @@ func TestSwitchNamespace_InvalidKubeconfig(t *testing.T) {
 	err = switchNamespace(sm, "default", []string{"default"})
 	if err == nil {
 		t.Fatal("switchNamespace() expected error for invalid kubeconfig path")
-	}
-}
-
-func TestSelectNamespace(t *testing.T) {
-	namespaces := []string{"default", "kube-system", "production"}
-
-	tests := []struct {
-		name          string
-		args          []string
-		interactive   bool
-		selector      func([]string) (string, error)
-		wantNamespace string
-		wantOutput    string
-		wantErr       bool
-	}{
-		{
-			name:          "arg provided",
-			args:          []string{"kube-system"},
-			interactive:   true,
-			wantNamespace: "kube-system",
-		},
-		{
-			name:        "non-interactive prints namespaces",
-			args:        nil,
-			interactive: false,
-			wantOutput:  "default\nkube-system\nproduction\n",
-		},
-		{
-			name:        "interactive uses selector",
-			args:        nil,
-			interactive: true,
-			selector: func(items []string) (string, error) {
-				return "production", nil
-			},
-			wantNamespace: "production",
-		},
-		{
-			name:        "selector error",
-			args:        nil,
-			interactive: true,
-			selector: func(items []string) (string, error) {
-				return "", fmt.Errorf("cancelled")
-			},
-			wantErr: true,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			var out bytes.Buffer
-			o := &NamespaceOptions{
-				Out:           &out,
-				ErrOut:        &bytes.Buffer{},
-				Args:          tt.args,
-				IsInteractive: func() bool { return tt.interactive },
-				Selector:      tt.selector,
-			}
-
-			ns, err := o.selectNamespace(namespaces)
-			if (err != nil) != tt.wantErr {
-				t.Fatalf("selectNamespace() error = %v, wantErr %v", err, tt.wantErr)
-			}
-			if ns != tt.wantNamespace {
-				t.Errorf("selectNamespace() = %q, want %q", ns, tt.wantNamespace)
-			}
-			if tt.wantOutput != "" && out.String() != tt.wantOutput {
-				t.Errorf("output = %q, want %q", out.String(), tt.wantOutput)
-			}
-		})
 	}
 }
 

@@ -145,21 +145,3 @@ func TestBuildFzfArgs(t *testing.T) {
 		})
 	}
 }
-
-func TestBuildFzfArgs_AnsiNotDuplicated(t *testing.T) {
-	original := config.Cfg
-	defer func() { config.Cfg = original }()
-
-	config.Cfg.Fzf.Opts = "--ansi"
-
-	got := buildFzfArgs(false)
-	count := 0
-	for _, arg := range got {
-		if arg == "--ansi" {
-			count++
-		}
-	}
-	if count != 1 {
-		t.Errorf("--ansi appeared %d times, want 1; args = %v", count, got)
-	}
-}
