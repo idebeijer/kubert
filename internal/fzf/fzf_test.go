@@ -1,6 +1,7 @@
 package fzf
 
 import (
+	"slices"
 	"testing"
 
 	"github.com/idebeijer/kubert/internal/config"
@@ -123,13 +124,7 @@ func TestBuildFzfArgs(t *testing.T) {
 			got := buildFzfArgs(tt.multiSelect)
 
 			for _, want := range tt.wantContains {
-				found := false
-				for _, arg := range got {
-					if arg == want {
-						found = true
-						break
-					}
-				}
+				found := slices.Contains(got, want)
 				if !found {
 					t.Errorf("buildFzfArgs() = %v, missing expected %q", got, want)
 				}
