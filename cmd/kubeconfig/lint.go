@@ -191,39 +191,49 @@ func validateKubeconfig(cfg *api.Config, result *lintResult) {
 		result.Warnings = append(result.Warnings, "no auth infos defined")
 	}
 
-	// Validate each context references valid cluster and auth info
-	for contextName, context := range cfg.Contexts {
-		if context.Cluster == "" {
+	validateContextRefs(cfg, result)
+	validateClusters(cfg, result)
+	validateCurrentContext(cfg, result)
+}
+
+func validateContextRefs(cfg *api.Config, result *lintResult) {
+	for name, ctx := range cfg.Contexts {
+		if ctx.Cluster == "" {
 			result.Errors = append(result.Errors,
-				fmt.Sprintf("context %q has no cluster set", contextName))
-		} else if _, exists := cfg.Clusters[context.Cluster]; !exists {
+				fmt.Sprintf("context %q has no cluster set", name))
+		} else if _, exists := cfg.Clusters[ctx.Cluster]; !exists {
 			result.Errors = append(result.Errors,
-				fmt.Sprintf("context %q references non-existent cluster %q", contextName, context.Cluster))
+				fmt.Sprintf("context %q references non-existent cluster %q", name, ctx.Cluster))
 		}
 
-		if context.AuthInfo == "" {
+		if ctx.AuthInfo == "" {
 			result.Warnings = append(result.Warnings,
-				fmt.Sprintf("context %q has no auth info set", contextName))
-		} else if _, exists := cfg.AuthInfos[context.AuthInfo]; !exists {
+				fmt.Sprintf("context %q has no auth info set", name))
+			continue
+		}
+		if _, exists := cfg.AuthInfos[ctx.AuthInfo]; !exists {
 			result.Errors = append(result.Errors,
-				fmt.Sprintf("context %q references non-existent auth info %q", contextName, context.AuthInfo))
+				fmt.Sprintf("context %q references non-existent auth info %q", name, ctx.AuthInfo))
 		}
 	}
+}
 
-	// Validate clusters
-	for clusterName, cluster := range cfg.Clusters {
+func validateClusters(cfg *api.Config, result *lintResult) {
+	for name, cluster := range cfg.Clusters {
 		if cluster.Server == "" {
 			result.Errors = append(result.Errors,
-				fmt.Sprintf("cluster %q has no server URL set", clusterName))
+				fmt.Sprintf("cluster %q has no server URL set", name))
 		}
 	}
+}
 
-	// Check if current-context is set and valid
-	if cfg.CurrentContext != "" {
-		if _, exists := cfg.Contexts[cfg.CurrentContext]; !exists {
-			result.Errors = append(result.Errors,
-				fmt.Sprintf("current-context %q does not exist", cfg.CurrentContext))
-		}
+func validateCurrentContext(cfg *api.Config, result *lintResult) {
+	if cfg.CurrentContext == "" {
+		return
+	}
+	if _, exists := cfg.Contexts[cfg.CurrentContext]; !exists {
+		result.Errors = append(result.Errors,
+			fmt.Sprintf("current-context %q does not exist", cfg.CurrentContext))
 	}
 }
 
