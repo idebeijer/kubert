@@ -171,7 +171,15 @@ func switchNamespace(sm *state.Manager, namespace string, namespaces []string) e
 		return err
 	}
 
-	cfg.Contexts[cfg.CurrentContext].Namespace = namespace
+	if cfg.Contexts == nil {
+		return fmt.Errorf("no contexts found in kubeconfig")
+	}
+	ctx, exists := cfg.Contexts[cfg.CurrentContext]
+	if !exists || ctx == nil {
+		return fmt.Errorf("current context %q not found in kubeconfig", cfg.CurrentContext)
+	}
+
+	ctx.Namespace = namespace
 
 	if err := clientcmd.WriteToFile(*cfg, kubeconfigPath); err != nil {
 		return fmt.Errorf("failed to write kubeconfig: %w", err)
