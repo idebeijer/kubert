@@ -20,14 +20,10 @@ type ContextInfo struct {
 }
 
 func (m *Manager) ContextInfo(context string) (ContextInfo, bool) {
-	var info ContextInfo
-	var exists bool
+	m.mutex.Lock()
+	defer m.mutex.Unlock()
 
-	_ = m.withMemoryLock(func() error {
-		info, exists = m.state.Contexts[context]
-		return nil
-	})
-
+	info, exists := m.state.Contexts[context]
 	return info, exists
 }
 
@@ -58,16 +54,13 @@ func (m *Manager) SetLastNamespace(context, namespace string) error {
 }
 
 func (m *Manager) ListContexts() []string {
-	var contexts []string
+	m.mutex.Lock()
+	defer m.mutex.Unlock()
 
-	_ = m.withMemoryLock(func() error {
-		contexts = make([]string, 0, len(m.state.Contexts))
-		for context := range m.state.Contexts {
-			contexts = append(contexts, context)
-		}
-		return nil
-	})
-
+	contexts := make([]string, 0, len(m.state.Contexts))
+	for context := range m.state.Contexts {
+		contexts = append(contexts, context)
+	}
 	return contexts
 }
 
@@ -96,46 +89,27 @@ func (m *Manager) DeleteContextProtection(context string) error {
 }
 
 func (m *Manager) IsContextProtected(context string) (bool, error) {
-	var result bool
-	var err error
-	var needsCleanup bool
+	m.mutex.Lock()
+	info, exists := m.state.Contexts[context]
+	m.mutex.Unlock()
 
-	_ = m.withMemoryLock(func() error {
-		info, exists := m.state.Contexts[context]
-		if !exists {
-			err = &ContextNotFoundError{Context: context}
-			return nil
-		}
-
-		// Check if protection is temporarily lifted
-		if info.ProtectedUntil != nil {
-			if time.Now().Before(*info.ProtectedUntil) {
-				result = false
-				return nil
-			}
-			// Lift has expired, mark for cleanup
-			needsCleanup = true
-		}
-
-		if info.Protected == nil {
-			result = false
-		} else {
-			result = *info.Protected
-		}
-		return nil
-	})
-
-	if err != nil {
-		return false, err
+	if !exists {
+		return false, &ContextNotFoundError{Context: context}
 	}
 
-	if needsCleanup {
-		// Clean up the expired timestamp
-		// We ignore the error here as it's a best effort cleanup and doesn't affect the result
+	// Check if protection is temporarily lifted
+	if info.ProtectedUntil != nil {
+		if time.Now().Before(*info.ProtectedUntil) {
+			return false, nil
+		}
+		// Lift has expired, clean up (best effort)
 		_ = m.ClearProtectedUntil(context)
 	}
 
-	return result, nil
+	if info.Protected == nil {
+		return false, nil
+	}
+	return *info.Protected, nil
 }
 
 // LiftContextProtection temporarily lifts protection for the given context until the specified time
@@ -188,16 +162,10 @@ func (m *Manager) SetLastNamespaceWithContextCreation(context, namespace string)
 }
 
 func (m *Manager) GetLastContext() (string, bool) {
-	var lastContext string
-	var exists bool
+	m.mutex.Lock()
+	defer m.mutex.Unlock()
 
-	_ = m.withMemoryLock(func() error {
-		lastContext = m.state.LastContext
-		exists = lastContext != ""
-		return nil
-	})
-
-	return lastContext, exists
+	return m.state.LastContext, m.state.LastContext != ""
 }
 
 func (m *Manager) SetLastContext(context string) error {

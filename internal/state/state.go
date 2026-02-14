@@ -95,12 +95,6 @@ func (m *Manager) withLock(fn func() error) error {
 	return fn()
 }
 
-func (m *Manager) withMemoryLock(fn func() error) error {
-	m.mutex.Lock()
-	defer m.mutex.Unlock()
-	return fn()
-}
-
 func (m *Manager) Lock() error {
 	m.mutex.Lock()
 	if err := m.fileLock.Lock(); err != nil {
