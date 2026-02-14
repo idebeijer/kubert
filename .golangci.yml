@@ -29,6 +29,14 @@ linters:
     modernize:
       disable:
         - omitzero
+    errcheck:
+      exclude-functions:
+        - fmt.Fprint
+        - fmt.Printf
+        - fmt.Println
+        - fmt.Fprintf
+        - fmt.Fprintln
+        - fmt.Print
   exclusions:
     generated: lax
     paths:

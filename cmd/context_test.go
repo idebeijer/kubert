@@ -9,11 +9,51 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/adrg/xdg"
+	"github.com/spf13/cobra"
 	"k8s.io/client-go/tools/clientcmd"
 	"k8s.io/client-go/tools/clientcmd/api"
 
 	"github.com/idebeijer/kubert/internal/config"
+	"github.com/idebeijer/kubert/internal/kubeconfig"
+	"github.com/idebeijer/kubert/internal/state"
 )
+
+// setupTestXDGDataHome sets xdg.DataHome to a temp directory and returns a cleanup function
+// that restores the original value.
+// nolint:unparam
+func setupTestXDGDataHome(t *testing.T) string {
+	t.Helper()
+	original := xdg.DataHome
+	tempDir := t.TempDir()
+	xdg.DataHome = tempDir
+	t.Cleanup(func() { xdg.DataHome = original })
+	return tempDir
+}
+
+func TestContextOptions_Complete_SetsConfig(t *testing.T) {
+	original := config.Cfg
+	defer func() { config.Cfg = original }()
+
+	config.Cfg = config.Config{
+		KubeconfigPaths: config.KubeconfigPaths{
+			Include: []string{"/some/path"},
+		},
+	}
+
+	o := NewContextOptions()
+	cmd := &cobra.Command{}
+
+	if len(o.Config.KubeconfigPaths.Include) != 0 {
+		t.Error("Config should not be set before Complete()")
+	}
+
+	_ = o.Complete(cmd, []string{})
+
+	if len(o.Config.KubeconfigPaths.Include) != 1 || o.Config.KubeconfigPaths.Include[0] != "/some/path" {
+		t.Errorf("Complete() should set Config from config.Cfg, got: %+v", o.Config.KubeconfigPaths)
+	}
+}
 
 func TestCreateTempKubeconfigFile_Isolation(t *testing.T) {
 	// Create a temp file to act as the "original" complex kubeconfig
@@ -28,24 +68,24 @@ func TestCreateTempKubeconfigFile_Isolation(t *testing.T) {
 	}()
 
 	// Define a complex configuration with multiple contexts, clusters, and users
-	config := api.NewConfig()
+	cfg := api.NewConfig()
 
 	// Cluster 1 data
-	config.Clusters["shared-cluster"] = &api.Cluster{Server: "https://shared.example.com"}
+	cfg.Clusters["shared-cluster"] = &api.Cluster{Server: "https://shared.example.com"}
 
-	config.AuthInfos["user-1"] = &api.AuthInfo{Token: "token-1"}
-	config.Contexts["ctx-1"] = &api.Context{Cluster: "shared-cluster", AuthInfo: "user-1", Namespace: "ns-1"}
+	cfg.AuthInfos["user-1"] = &api.AuthInfo{Token: "token-1"}
+	cfg.Contexts["ctx-1"] = &api.Context{Cluster: "shared-cluster", AuthInfo: "user-1", Namespace: "ns-1"}
 
-	config.AuthInfos["user-2"] = &api.AuthInfo{Username: "admin", Password: "password"}
-	config.Contexts["ctx-2"] = &api.Context{Cluster: "shared-cluster", AuthInfo: "user-2", Namespace: "default"}
+	cfg.AuthInfos["user-2"] = &api.AuthInfo{Username: "admin", Password: "password"}
+	cfg.Contexts["ctx-2"] = &api.Context{Cluster: "shared-cluster", AuthInfo: "user-2", Namespace: "default"}
 
 	// Cluster 2 data
-	config.Clusters["other-cluster"] = &api.Cluster{Server: "https://other.example.com"}
-	config.AuthInfos["user-3"] = &api.AuthInfo{ClientCertificate: "/path/to/cert"}
-	config.Contexts["ctx-3"] = &api.Context{Cluster: "other-cluster", AuthInfo: "user-3"}
+	cfg.Clusters["other-cluster"] = &api.Cluster{Server: "https://other.example.com"}
+	cfg.AuthInfos["user-3"] = &api.AuthInfo{ClientCertificate: "/path/to/cert"}
+	cfg.Contexts["ctx-3"] = &api.Context{Cluster: "other-cluster", AuthInfo: "user-3"}
 
 	// Write this original config to disk
-	if err := clientcmd.WriteToFile(*config, tempFile.Name()); err != nil {
+	if err := clientcmd.WriteToFile(*cfg, tempFile.Name()); err != nil {
 		t.Fatal(err)
 	}
 
@@ -112,6 +152,7 @@ func TestCreateTempKubeconfigFile_Isolation(t *testing.T) {
 
 // Note: This is an experimental test that simulates launching a shell with the modified kubeconfig.
 // Skipped for now.
+// nolint
 func TestLaunchShellWithKubeconfig(t *testing.T) {
 	t.Skip()
 
@@ -125,7 +166,9 @@ func TestLaunchShellWithKubeconfig(t *testing.T) {
 
 		// 2. TODO: simulate running kubert commands either by binary or by directly calling the logic
 
-		if err := runNamespaceCommand([]string{"default"}); err != nil {
+		o := NewNamespaceOptions()
+		o.Args = []string{"default"}
+		if err := o.Run(); err != nil {
 			fmt.Fprintf(os.Stderr, "Failed to run namespace command: %v\n", err)
 			os.Exit(1)
 		}
@@ -180,6 +223,7 @@ func TestLaunchShellWithKubeconfig(t *testing.T) {
 // Note: This test is experimental and more of an integration test which may be flaky and should
 // be run inside the ./testdata/Dockerfile container.
 // Running locally would require all shells to be installed.
+// nolint
 func TestLaunchShells(t *testing.T) {
 	if os.Getenv("RUN_SHELL_TESTS") != "true" {
 		t.Skip("Skipping shell tests")
@@ -259,4 +303,419 @@ func TestLaunchShells(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestContextOptions_Complete(t *testing.T) {
+	tests := []struct {
+		name         string
+		args         []string
+		expectedArgs []string
+	}{
+		{
+			name:         "with context name",
+			args:         []string{"my-cluster"},
+			expectedArgs: []string{"my-cluster"},
+		},
+		{
+			name:         "with previous context flag",
+			args:         []string{"-"},
+			expectedArgs: []string{"-"},
+		},
+		{
+			name:         "no args",
+			args:         []string{},
+			expectedArgs: []string{},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			o := NewContextOptions()
+			cmd := &cobra.Command{}
+
+			err := o.Complete(cmd, tt.args)
+			if err != nil {
+				t.Errorf("Complete() returned error: %v", err)
+			}
+
+			if len(o.Args) != len(tt.expectedArgs) {
+				t.Fatalf("Args length mismatch: got %d, want %d", len(o.Args), len(tt.expectedArgs))
+			}
+
+			for i, arg := range o.Args {
+				if arg != tt.expectedArgs[i] {
+					t.Errorf("Args[%d] = %s, want %s", i, arg, tt.expectedArgs[i])
+				}
+			}
+		})
+	}
+}
+
+func TestContextOptions_Run_WithContextName(t *testing.T) {
+	var buf bytes.Buffer
+	shellLauncherCalled := false
+	tempFileCreated := false
+
+	o := &ContextOptions{
+		Out:    &buf,
+		ErrOut: &buf,
+		Args:   []string{"test-cluster"},
+		Config: config.Config{},
+		ContextLoader: func() ([]kubeconfig.Context, error) {
+			return []kubeconfig.Context{
+				{Name: "test-cluster", WithPath: kubeconfig.WithPath{FilePath: "/tmp/config"}},
+			}, nil
+		},
+		StateManager: func() (*state.Manager, error) {
+			setupTestXDGDataHome(t)
+			return state.NewManager()
+		},
+		Selector: func(items []string) (string, error) {
+			t.Error("Selector should not be called when context name is provided")
+			return "", nil
+		},
+		IsInteractive: func() bool {
+			return true
+		},
+		ShellLauncher: func(kubeconfigPath, originalPath, contextName string, cfg config.Config) error {
+			shellLauncherCalled = true
+			if contextName != "test-cluster" {
+				t.Errorf("Expected context name 'test-cluster', got '%s'", contextName)
+			}
+			return nil
+		},
+		TempFileWriter: func(kubeconfigPath, contextName, namespace string) (*os.File, func(), error) {
+			tempFileCreated = true
+			tempFile, _ := os.CreateTemp("", "test-*.yaml")
+			cleanup := func() {
+				_ = tempFile.Close()
+				_ = os.Remove(tempFile.Name())
+			}
+			return tempFile, cleanup, nil
+		},
+	}
+
+	err := o.Run()
+	if err != nil {
+		t.Errorf("Run() returned unexpected error: %v", err)
+	}
+
+	if !shellLauncherCalled {
+		t.Error("ShellLauncher should have been called")
+	}
+
+	if !tempFileCreated {
+		t.Error("TempFileWriter should have been called")
+	}
+}
+
+func TestContextOptions_Run_PreviousContext(t *testing.T) {
+	var buf bytes.Buffer
+	shellLauncherCalled := false
+
+	setupTestXDGDataHome(t)
+
+	sm, err := state.NewManager()
+	if err != nil {
+		t.Fatalf("Failed to create state manager: %v", err)
+	}
+
+	_ = sm.SetLastContext("previous-cluster")
+
+	o := &ContextOptions{
+		Out:    &buf,
+		ErrOut: &buf,
+		Args:   []string{"-"},
+		Config: config.Config{},
+		ContextLoader: func() ([]kubeconfig.Context, error) {
+			return []kubeconfig.Context{
+				{Name: "previous-cluster", WithPath: kubeconfig.WithPath{FilePath: "/tmp/config"}},
+			}, nil
+		},
+		StateManager: func() (*state.Manager, error) {
+			return sm, nil
+		},
+		ShellLauncher: func(kubeconfigPath, originalPath, contextName string, cfg config.Config) error {
+			shellLauncherCalled = true
+			if contextName != "previous-cluster" {
+				t.Errorf("Expected context name 'previous-cluster', got '%s'", contextName)
+			}
+			return nil
+		},
+		TempFileWriter: func(kubeconfigPath, contextName, namespace string) (*os.File, func(), error) {
+			tempFile, _ := os.CreateTemp("", "test-*.yaml")
+			cleanup := func() {
+				_ = tempFile.Close()
+				_ = os.Remove(tempFile.Name())
+			}
+			return tempFile, cleanup, nil
+		},
+	}
+
+	err = o.Run()
+	if err != nil {
+		t.Errorf("Run() returned unexpected error: %v", err)
+	}
+
+	if !shellLauncherCalled {
+		t.Error("ShellLauncher should have been called")
+	}
+}
+
+func TestContextOptions_Run_NoPreviousContext(t *testing.T) {
+	var buf bytes.Buffer
+
+	setupTestXDGDataHome(t)
+
+	sm, err := state.NewManager()
+	if err != nil {
+		t.Fatalf("Failed to create state manager: %v", err)
+	}
+
+	o := &ContextOptions{
+		Out:    &buf,
+		ErrOut: &buf,
+		Args:   []string{"-"},
+		Config: config.Config{},
+		ContextLoader: func() ([]kubeconfig.Context, error) {
+			return []kubeconfig.Context{
+				{Name: "test-cluster", WithPath: kubeconfig.WithPath{FilePath: "/tmp/config"}},
+			}, nil
+		},
+		StateManager: func() (*state.Manager, error) {
+			return sm, nil
+		},
+	}
+
+	err = o.Run()
+	if err == nil {
+		t.Error("Expected error for no previous context, got nil")
+		return
+	}
+	if !strings.Contains(err.Error(), "no previous context") {
+		t.Errorf("Unexpected error message: %v", err)
+	}
+}
+
+func TestContextOptions_Run_InteractiveSelection(t *testing.T) {
+	var buf bytes.Buffer
+	selectorCalled := false
+	shellLauncherCalled := false
+
+	o := &ContextOptions{
+		Out:    &buf,
+		ErrOut: &buf,
+		Args:   []string{},
+		Config: config.Config{},
+		ContextLoader: func() ([]kubeconfig.Context, error) {
+			return []kubeconfig.Context{
+				{Name: "cluster-1", WithPath: kubeconfig.WithPath{FilePath: "/tmp/config"}},
+				{Name: "cluster-2", WithPath: kubeconfig.WithPath{FilePath: "/tmp/config"}},
+			}, nil
+		},
+		StateManager: func() (*state.Manager, error) {
+			setupTestXDGDataHome(t)
+			return state.NewManager()
+		},
+		Selector: func(items []string) (string, error) {
+			selectorCalled = true
+			return "cluster-1", nil
+		},
+		IsInteractive: func() bool {
+			return true
+		},
+		ShellLauncher: func(kubeconfigPath, originalPath, contextName string, cfg config.Config) error {
+			shellLauncherCalled = true
+			return nil
+		},
+		TempFileWriter: func(kubeconfigPath, contextName, namespace string) (*os.File, func(), error) {
+			tempFile, _ := os.CreateTemp("", "test-*.yaml")
+			cleanup := func() {
+				_ = tempFile.Close()
+				_ = os.Remove(tempFile.Name())
+			}
+			return tempFile, cleanup, nil
+		},
+	}
+
+	err := o.Run()
+	if err != nil {
+		t.Errorf("Run() returned unexpected error: %v", err)
+	}
+
+	if !selectorCalled {
+		t.Error("Selector should have been called in interactive mode")
+	}
+
+	if !shellLauncherCalled {
+		t.Error("ShellLauncher should have been called")
+	}
+}
+
+func TestContextOptions_Run_NonInteractivePrintOnly(t *testing.T) {
+	var buf bytes.Buffer
+
+	o := &ContextOptions{
+		Out:    &buf,
+		ErrOut: &buf,
+		Args:   []string{},
+		Config: config.Config{},
+		ContextLoader: func() ([]kubeconfig.Context, error) {
+			return []kubeconfig.Context{
+				{Name: "cluster-1", WithPath: kubeconfig.WithPath{FilePath: "/tmp/config"}},
+				{Name: "cluster-2", WithPath: kubeconfig.WithPath{FilePath: "/tmp/config"}},
+			}, nil
+		},
+		StateManager: func() (*state.Manager, error) {
+			setupTestXDGDataHome(t)
+			return state.NewManager()
+		},
+		Selector: func(items []string) (string, error) {
+			t.Error("Selector should not be called in non-interactive mode")
+			return "", nil
+		},
+		IsInteractive: func() bool {
+			return false
+		},
+		ShellLauncher: func(kubeconfigPath, originalPath, contextName string, cfg config.Config) error {
+			t.Error("ShellLauncher should not be called when printing only")
+			return nil
+		},
+	}
+
+	err := o.Run()
+	if err != nil {
+		t.Errorf("Run() returned unexpected error: %v", err)
+	}
+
+	output := buf.String()
+	if !strings.Contains(output, "cluster-1") {
+		t.Error("Expected cluster-1 in output")
+	}
+	if !strings.Contains(output, "cluster-2") {
+		t.Error("Expected cluster-2 in output")
+	}
+}
+
+func TestContextOptions_Run_ContextNotFound(t *testing.T) {
+	var buf bytes.Buffer
+
+	o := &ContextOptions{
+		Out:    &buf,
+		ErrOut: &buf,
+		Args:   []string{"nonexistent-cluster"},
+		Config: config.Config{},
+		ContextLoader: func() ([]kubeconfig.Context, error) {
+			return []kubeconfig.Context{
+				{Name: "cluster-1", WithPath: kubeconfig.WithPath{FilePath: "/tmp/config"}},
+			}, nil
+		},
+		StateManager: func() (*state.Manager, error) {
+			setupTestXDGDataHome(t)
+			return state.NewManager()
+		},
+	}
+
+	err := o.Run()
+	if err == nil {
+		t.Error("Expected error for nonexistent context, got nil")
+	}
+	if !strings.Contains(err.Error(), "context nonexistent-cluster not found") {
+		t.Errorf("Unexpected error message: %v", err)
+	}
+}
+
+func TestContextOptions_Run_ContextLoaderError(t *testing.T) {
+	var buf bytes.Buffer
+
+	o := &ContextOptions{
+		Out:    &buf,
+		ErrOut: &buf,
+		Args:   []string{"test-cluster"},
+		StateManager: func() (*state.Manager, error) {
+			setupTestXDGDataHome(t)
+			return state.NewManager()
+		},
+		ContextLoader: func() ([]kubeconfig.Context, error) {
+			return nil, fmt.Errorf("failed to load kubeconfig")
+		},
+	}
+
+	err := o.Run()
+	if err == nil {
+		t.Error("Expected error from context loader, got nil")
+		return
+	}
+	if !strings.Contains(err.Error(), "error loading contexts") {
+		t.Errorf("Unexpected error message: %v", err)
+	}
+}
+
+func TestContextOptions_Run_StateManagerError(t *testing.T) {
+	var buf bytes.Buffer
+
+	o := &ContextOptions{
+		Out:    &buf,
+		ErrOut: &buf,
+		Args:   []string{"test-cluster"},
+		StateManager: func() (*state.Manager, error) {
+			return nil, fmt.Errorf("state manager initialization failed")
+		},
+	}
+
+	err := o.Run()
+	if err == nil {
+		t.Error("Expected error from state manager, got nil")
+	}
+	if !strings.Contains(err.Error(), "error creating state manager") {
+		t.Errorf("Unexpected error message: %v", err)
+	}
+}
+
+func TestGetContextNames(t *testing.T) {
+	contexts := []kubeconfig.Context{
+		{Name: "cluster-1"},
+		{Name: "cluster-2"},
+		{Name: "cluster-3"},
+	}
+
+	names := getContextNames(contexts)
+
+	if len(names) != 3 {
+		t.Errorf("Expected 3 names, got %d", len(names))
+	}
+
+	expectedNames := map[string]bool{"cluster-1": true, "cluster-2": true, "cluster-3": true}
+	for _, name := range names {
+		if !expectedNames[name] {
+			t.Errorf("Unexpected name: %s", name)
+		}
+	}
+}
+
+func TestFindContextByName(t *testing.T) {
+	contexts := []kubeconfig.Context{
+		{Name: "cluster-1", WithPath: kubeconfig.WithPath{FilePath: "/tmp/config1"}},
+		{Name: "cluster-2", WithPath: kubeconfig.WithPath{FilePath: "/tmp/config2"}},
+	}
+
+	t.Run("context found", func(t *testing.T) {
+		ctx, found := findContextByName(contexts, "cluster-1")
+		if !found {
+			t.Error("Expected to find cluster-1")
+		}
+		if ctx.Name != "cluster-1" {
+			t.Errorf("Expected name 'cluster-1', got '%s'", ctx.Name)
+		}
+		if ctx.FilePath != "/tmp/config1" {
+			t.Errorf("Expected path '/tmp/config1', got '%s'", ctx.FilePath)
+		}
+	})
+
+	t.Run("context not found", func(t *testing.T) {
+		_, found := findContextByName(contexts, "nonexistent")
+		if found {
+			t.Error("Should not find nonexistent context")
+		}
+	})
 }

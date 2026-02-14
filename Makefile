@@ -30,6 +30,11 @@ test-race: ## Run tests with race detection
 test-short: ## Run tests in short mode
 	go test -short -v ./...
 
+.PHONY: test-cover
+test-cover: ## Run tests with coverage
+	go test -coverprofile=coverage.out ./...
+	go tool cover -html=coverage.out
+
 .PHONY: lint
 lint: ## Run golangci-lint against code
 	golangci-lint run

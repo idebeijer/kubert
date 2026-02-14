@@ -9,7 +9,7 @@ import (
 	"github.com/idebeijer/kubert/internal/config"
 )
 
-func IsInteractiveShell() bool {
+func IsInteractive() bool {
 	if !config.Cfg.Interactive {
 		return false
 	}
