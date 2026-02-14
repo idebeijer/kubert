@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"fmt"
+	"io"
 	"log/slog"
 	"os"
 	"os/exec"
@@ -38,58 +39,62 @@ Use '-' to switch to the previously selected context.`,
 		SilenceUsage:      true,
 		ValidArgsFunction: validContextArgsFunction,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			cfg := config.Cfg
-
-			fsProvider := kubeconfig.NewFileSystemProvider(cfg.KubeconfigPaths.Include, cfg.KubeconfigPaths.Exclude)
-			loader := kubeconfig.NewLoader(
-				kubeconfig.WithProvider(fsProvider),
-			)
-
-			sm, err := state.NewManager()
-			if err != nil {
-				return fmt.Errorf("error creating state manager: %w", err)
-			}
-
-			contexts, err := loader.LoadContexts()
-			if err != nil {
-				return fmt.Errorf("error loading contexts: %w", err)
-			}
-			slog.Debug("Contexts loaded", "count", len(contexts))
-
-			contextNames := getContextNames(contexts)
-			sort.Strings(contextNames)
-
-			selectedContextName, err := selectContextName(args, contextNames, sm)
-			if err != nil {
-				return err
-			}
-			if selectedContextName == "" {
-				return nil
-			}
-
-			selectedContext, found := findContextByName(contexts, selectedContextName)
-			if !found {
-				return fmt.Errorf("context %s not found", selectedContextName)
-			}
-
-			contextInState, _ := sm.ContextInfo(selectedContextName)
-			tempKubeconfig, cleanup, err := createTempKubeconfigFile(selectedContext.FilePath, selectedContextName, contextInState.LastNamespace)
-			if err != nil {
-				return err
-			}
-			defer cleanup()
-
-			slog.Debug("Created a new kubeconfig with the specified context", "tempKubeconfig", tempKubeconfig.Name())
-
-			if err := sm.SetLastContext(selectedContextName); err != nil {
-				slog.Warn("Failed to save last context", "error", err)
-			}
-
-			return launchShellWithKubeconfig(tempKubeconfig.Name(), selectedContext.FilePath, selectedContextName, cfg)
+			return runContextCommand(args)
 		},
 	}
 
 	return cmd
+}
+
+func runContextCommand(args []string) error {
+	cfg := config.Cfg
+
+	fsProvider := kubeconfig.NewFileSystemProvider(cfg.KubeconfigPaths.Include, cfg.KubeconfigPaths.Exclude)
+	loader := kubeconfig.NewLoader(
+		kubeconfig.WithProvider(fsProvider),
+	)
+
+	sm, err := state.NewManager()
+	if err != nil {
+		return fmt.Errorf("error creating state manager: %w", err)
+	}
+
+	contexts, err := loader.LoadContexts()
+	if err != nil {
+		return fmt.Errorf("error loading contexts: %w", err)
+	}
+	slog.Debug("Contexts loaded", "count", len(contexts))
+
+	contextNames := getContextNames(contexts)
+	sort.Strings(contextNames)
+
+	selectedContextName, err := selectContextName(args, contextNames, sm)
+	if err != nil {
+		return err
+	}
+	if selectedContextName == "" {
+		return nil
+	}
+
+	selectedContext, found := findContextByName(contexts, selectedContextName)
+	if !found {
+		return fmt.Errorf("context %s not found", selectedContextName)
+	}
+
+	contextInState, _ := sm.ContextInfo(selectedContextName)
+	tempKubeconfig, cleanup, err := createTempKubeconfigFile(selectedContext.FilePath, selectedContextName, contextInState.LastNamespace)
+	if err != nil {
+		return err
+	}
+	defer cleanup()
+
+	slog.Debug("Created a new kubeconfig with the specified context", "tempKubeconfig", tempKubeconfig.Name())
+
+	if err := sm.SetLastContext(selectedContextName); err != nil {
+		slog.Warn("Failed to save last context", "error", err)
+	}
+
+	return launchShellWithKubeconfig(tempKubeconfig.Name(), selectedContext.FilePath, selectedContextName, cfg)
 }
 
 func getContextNames(contexts []kubeconfig.Context) []string {
@@ -192,28 +197,35 @@ func getUserShell() string {
 	return shell
 }
 
-func launchShellWithKubeconfig(kubeconfigPath, originalKubeconfigPath, contextName string, cfg config.Config) error {
-	// Set the KUBECONFIG environment variable to the path of the temporary kubeconfig file
-	if err := os.Setenv("KUBECONFIG", kubeconfigPath); err != nil {
-		return fmt.Errorf("failed to set KUBECONFIG environment variable: %w", err)
+type ShellOptions struct {
+	Stdin  io.Reader
+	Stdout io.Writer
+	Stderr io.Writer
+}
+
+func DefaultShellOptions() ShellOptions {
+	return ShellOptions{
+		Stdin:  os.Stdin,
+		Stdout: os.Stdout,
+		Stderr: os.Stderr,
 	}
-	if err := os.Setenv(kubert.ShellActiveEnvVar, "1"); err != nil {
-		return fmt.Errorf("failed to set KUBERT_SHELL environment variable: %w", err)
-	}
-	if err := os.Setenv(kubert.ShellKubeconfigEnvVar, kubeconfigPath); err != nil {
-		return fmt.Errorf("failed to set KUBERT_SHELL_KUBECONFIG environment variable: %w", err)
-	}
-	if err := os.Setenv(kubert.ShellOriginalKubeconfigEnvVar, originalKubeconfigPath); err != nil {
-		return fmt.Errorf("failed to set KUBERT_SHELL_ORIGINAL_KUBECONFIG environment variable: %w", err)
-	}
-	if err := os.Setenv(kubert.ShellContextEnvVar, contextName); err != nil {
-		return fmt.Errorf("failed to set KUBERT_SHELL_CONTEXT environment variable: %w", err)
+}
+
+func launchShellWithKubeconfig(kubeconfigPath, originalKubeconfigPath, contextName string, cfg config.Config, opts ...ShellOptions) error {
+	opt := DefaultShellOptions()
+	if len(opts) > 0 {
+		opt = opts[0]
 	}
 
+	env := os.Environ()
+	env = append(env, "KUBECONFIG="+kubeconfigPath)
+	env = append(env, kubert.ShellActiveEnvVar+"=1")
+	env = append(env, kubert.ShellKubeconfigEnvVar+"="+kubeconfigPath)
+	env = append(env, kubert.ShellOriginalKubeconfigEnvVar+"="+originalKubeconfigPath)
+	env = append(env, kubert.ShellContextEnvVar+"="+contextName)
+
 	statefile, _ := state.FilePath()
-	if err := os.Setenv(kubert.ShellStateFilePathEnvVar, statefile); err != nil {
-		return fmt.Errorf("failed to set KUBERT_SHELL_STATE_FILE environment variable: %w", err)
-	}
+	env = append(env, kubert.ShellStateFilePathEnvVar+"="+statefile)
 
 	// Execute pre-shell hook if configured
 	if cfg.Hooks.PreShell != "" {
@@ -224,9 +236,10 @@ func launchShellWithKubeconfig(kubeconfigPath, originalKubeconfigPath, contextNa
 
 	// Launch the shell with the current environment, including the modified KUBECONFIG
 	shellCmd := exec.Command(getUserShell())
-	shellCmd.Stdin = os.Stdin
-	shellCmd.Stdout = os.Stdout
-	shellCmd.Stderr = os.Stderr
+	shellCmd.Env = env
+	shellCmd.Stdin = opt.Stdin
+	shellCmd.Stdout = opt.Stdout
+	shellCmd.Stderr = opt.Stderr
 
 	shellErr := shellCmd.Run()
 
