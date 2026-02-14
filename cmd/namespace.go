@@ -29,41 +29,45 @@ func NewNamespaceCommand() *cobra.Command {
 		SilenceUsage:      true,
 		ValidArgsFunction: validNamespaceArgsFunction,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-			defer cancel()
-
-			sm, err := state.NewManager()
-			if err != nil {
-				return err
-			}
-
-			clientset, err := createKubernetesClient()
-			if err != nil {
-				return err
-			}
-
-			namespaces, err := listNamespaces(ctx, clientset)
-			if err != nil {
-				if ctx.Err() == context.DeadlineExceeded {
-					return fmt.Errorf("timeout listing namespaces: cluster may be unreachable")
-				}
-				return err
-			}
-
-			namespace, err := selectNamespace(args, namespaces)
-			if err != nil {
-				return err
-			}
-
-			if err := switchNamespace(sm, namespace, namespaces); err != nil {
-				return err
-			}
-
-			return nil
+			return runNamespaceCommand(args)
 		},
 	}
 
 	return cmd
+}
+
+func runNamespaceCommand(args []string) error {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	sm, err := state.NewManager()
+	if err != nil {
+		return err
+	}
+
+	clientset, err := createKubernetesClient()
+	if err != nil {
+		return err
+	}
+
+	namespaces, err := listNamespaces(ctx, clientset)
+	if err != nil {
+		if ctx.Err() == context.DeadlineExceeded {
+			return fmt.Errorf("timeout listing namespaces: cluster may be unreachable")
+		}
+		return err
+	}
+
+	namespace, err := selectNamespace(args, namespaces)
+	if err != nil {
+		return err
+	}
+
+	if err := switchNamespace(sm, namespace, namespaces); err != nil {
+		return err
+	}
+
+	return nil
 }
 
 // createKubernetesClient creates a Kubernetes client from the kubeconfig

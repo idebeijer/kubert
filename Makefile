@@ -65,3 +65,25 @@ docs: ## Generate docs
 .PHONY: generate-default-config
 generate-default-config: ## Generate default config
 	go run tools/generate_default_cfg.go
+
+##@ Testing in Docker (experimental tests)
+
+.PHONY: test-docker-build
+test-docker-build: ## Build the test Docker image (used for testing in Docker)
+	docker build -t kubert-test -f testdata/Dockerfile .
+
+.PHONY: test-docker-run
+test-docker-run: test-docker-build ## Run tests inside the test Docker image (used for testing in Docker)
+	docker run --rm -e RUN_SHELL_TESTS=true kubert-test:latest
+
+.PHONY: test-docker-exec-shell
+test-docker-exec-shell: test-docker-build ## Open a shell in the Docker test container
+    docker run --rm -it kubert-test:latest /bin/sh
+
+.PHONY: test-docker-shells
+test-docker-bash: test-docker-build ## Test with bash shell in Docker
+    docker run --rm -e RUN_SHELL_TESTS=true -e SHELL=/bin/bash kubert-test:latest go test -run TestLaunchShells ./cmd -v
+
+.PHONY: test-docker-full
+test-docker-full: test-docker-build ## Run all tests (including shell tests) in Docker
+    docker run --rm -e RUN_SHELL_TESTS=true kubert-test:latest go test ./... -v
