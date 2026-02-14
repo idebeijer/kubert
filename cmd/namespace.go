@@ -102,7 +102,7 @@ func selectNamespace(args []string, namespaces []string) (string, error) {
 	if len(args) > 0 {
 		return args[0], nil
 	}
-	if !fzf.IsInteractiveShell() {
+	if !fzf.IsInteractive() {
 		printNamespaces(namespaces)
 		return "", nil
 	}

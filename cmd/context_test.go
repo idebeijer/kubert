@@ -28,24 +28,24 @@ func TestCreateTempKubeconfigFile_Isolation(t *testing.T) {
 	}()
 
 	// Define a complex configuration with multiple contexts, clusters, and users
-	config := api.NewConfig()
+	cfg := api.NewConfig()
 
 	// Cluster 1 data
-	config.Clusters["shared-cluster"] = &api.Cluster{Server: "https://shared.example.com"}
+	cfg.Clusters["shared-cluster"] = &api.Cluster{Server: "https://shared.example.com"}
 
-	config.AuthInfos["user-1"] = &api.AuthInfo{Token: "token-1"}
-	config.Contexts["ctx-1"] = &api.Context{Cluster: "shared-cluster", AuthInfo: "user-1", Namespace: "ns-1"}
+	cfg.AuthInfos["user-1"] = &api.AuthInfo{Token: "token-1"}
+	cfg.Contexts["ctx-1"] = &api.Context{Cluster: "shared-cluster", AuthInfo: "user-1", Namespace: "ns-1"}
 
-	config.AuthInfos["user-2"] = &api.AuthInfo{Username: "admin", Password: "password"}
-	config.Contexts["ctx-2"] = &api.Context{Cluster: "shared-cluster", AuthInfo: "user-2", Namespace: "default"}
+	cfg.AuthInfos["user-2"] = &api.AuthInfo{Username: "admin", Password: "password"}
+	cfg.Contexts["ctx-2"] = &api.Context{Cluster: "shared-cluster", AuthInfo: "user-2", Namespace: "default"}
 
 	// Cluster 2 data
-	config.Clusters["other-cluster"] = &api.Cluster{Server: "https://other.example.com"}
-	config.AuthInfos["user-3"] = &api.AuthInfo{ClientCertificate: "/path/to/cert"}
-	config.Contexts["ctx-3"] = &api.Context{Cluster: "other-cluster", AuthInfo: "user-3"}
+	cfg.Clusters["other-cluster"] = &api.Cluster{Server: "https://other.example.com"}
+	cfg.AuthInfos["user-3"] = &api.AuthInfo{ClientCertificate: "/path/to/cert"}
+	cfg.Contexts["ctx-3"] = &api.Context{Cluster: "other-cluster", AuthInfo: "user-3"}
 
 	// Write this original config to disk
-	if err := clientcmd.WriteToFile(*config, tempFile.Name()); err != nil {
+	if err := clientcmd.WriteToFile(*cfg, tempFile.Name()); err != nil {
 		t.Fatal(err)
 	}
 
@@ -112,6 +112,7 @@ func TestCreateTempKubeconfigFile_Isolation(t *testing.T) {
 
 // Note: This is an experimental test that simulates launching a shell with the modified kubeconfig.
 // Skipped for now.
+// nolint
 func TestLaunchShellWithKubeconfig(t *testing.T) {
 	t.Skip()
 
@@ -180,6 +181,7 @@ func TestLaunchShellWithKubeconfig(t *testing.T) {
 // Note: This test is experimental and more of an integration test which may be flaky and should
 // be run inside the ./testdata/Dockerfile container.
 // Running locally would require all shells to be installed.
+// nolint
 func TestLaunchShells(t *testing.T) {
 	if os.Getenv("RUN_SHELL_TESTS") != "true" {
 		t.Skip("Skipping shell tests")

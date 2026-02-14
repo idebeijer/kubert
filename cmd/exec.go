@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"regexp"
@@ -18,21 +19,45 @@ import (
 	"github.com/idebeijer/kubert/internal/state"
 )
 
-type execFlags struct {
-	namespace string
-	regex     bool
-	parallel  bool
-	dryRun    bool
+type ExecOptions struct {
+	Out    io.Writer
+	ErrOut io.Writer
+
+	Namespace string
+	Regex     bool
+	Parallel  bool
+	DryRun    bool
+
+	Patterns    []string
+	CommandArgs []string
+
+	Config        config.Config
+	ContextLoader func() ([]kubeconfig.Context, error)
+	StateManager  func() (*state.Manager, error)
+	IsInteractive func() bool
+	Selector      func([]string) ([]string, error)
 }
 
-type contextExecResult struct {
-	contextName string
-	output      string
-	err         error
+func NewExecOptions() *ExecOptions {
+	return &ExecOptions{
+		Out:    os.Stdout,
+		ErrOut: os.Stderr,
+		Config: config.Cfg,
+
+		ContextLoader: func() ([]kubeconfig.Context, error) {
+			cfg := config.Cfg
+			fsProvider := kubeconfig.NewFileSystemProvider(cfg.KubeconfigPaths.Include, cfg.KubeconfigPaths.Exclude)
+			loader := kubeconfig.NewLoader(kubeconfig.WithProvider(fsProvider))
+			return loader.LoadContexts()
+		},
+		StateManager:  state.NewManager,
+		IsInteractive: fzf.IsInteractive,
+		Selector:      fzf.SelectMulti,
+	}
 }
 
 func NewExecCommand() *cobra.Command {
-	flags := &execFlags{}
+	o := NewExecOptions()
 
 	cmd := &cobra.Command{
 		Use:   "exec [pattern...] -- command [args...]",
@@ -67,102 +92,127 @@ you can select multiple contexts interactively (use Tab/Shift-Tab to select).`,
 		SilenceUsage: true,
 		Args:         cobra.MinimumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			cfg := config.Cfg
-			fsProvider := kubeconfig.NewFileSystemProvider(cfg.KubeconfigPaths.Include, cfg.KubeconfigPaths.Exclude)
-			loader := kubeconfig.NewLoader(kubeconfig.WithProvider(fsProvider))
-
-			contexts, err := loader.LoadContexts()
-			if err != nil {
-				return fmt.Errorf("error loading contexts: %w", err)
+			if err := o.Complete(cmd, args); err != nil {
+				return err
 			}
-
-			// Use ArgsLenAtDash to find where "--" was in the original command
-			// If ArgsLenAtDash returns -1, there was no "--" separator
-			dashIdx := cmd.ArgsLenAtDash()
-
-			var patterns []string
-			var commandArgs []string
-
-			switch dashIdx {
-			case -1:
-				return fmt.Errorf("missing '--' separator between patterns and command")
-			case 0:
-				patterns = []string{}
-				commandArgs = args
-			default:
-				// Split at the dash index
-				patterns = args[:dashIdx]
-				commandArgs = args[dashIdx:]
+			if err := o.Validate(); err != nil {
+				return err
 			}
-
-			if len(commandArgs) == 0 {
-				return fmt.Errorf("no command provided after '--'")
-			}
-
-			var matchedContexts []kubeconfig.Context
-
-			if len(patterns) == 0 {
-				if !fzf.IsInteractiveShell() {
-					return fmt.Errorf("patterns are required in non-interactive mode")
-				}
-
-				contextNames := getContextNames(contexts)
-				sort.Strings(contextNames)
-
-				selectedNames, err := fzf.SelectMulti(contextNames)
-				if err != nil {
-					return fmt.Errorf("context selection cancelled or failed: %w", err)
-				}
-
-				if len(selectedNames) == 0 {
-					return fmt.Errorf("no contexts selected")
-				}
-
-				for _, name := range selectedNames {
-					ctx, found := findContextByName(contexts, name)
-					if found {
-						matchedContexts = append(matchedContexts, ctx)
-					}
-				}
-			} else {
-				matchedContexts, err = filterContextsByPatterns(contexts, patterns, flags.regex)
-				if err != nil {
-					return fmt.Errorf("error filtering contexts: %w", err)
-				}
-
-				if len(matchedContexts) == 0 {
-					return fmt.Errorf("no contexts matched the patterns: %s", strings.Join(patterns, ", "))
-				}
-			}
-
-			sm, err := state.NewManager()
-			if err != nil {
-				return fmt.Errorf("error creating state manager: %w", err)
-			}
-
-			if flags.dryRun {
-				return showDryRun(matchedContexts, commandArgs, flags.namespace, sm, cfg)
-			}
-
-			fmt.Printf("Executing command against %d context(s):\n", len(matchedContexts))
-			for _, ctx := range matchedContexts {
-				fmt.Printf("  - %s\n", ctx.Name)
-			}
-			fmt.Println()
-
-			if flags.parallel {
-				return executeParallel(matchedContexts, commandArgs, flags.namespace, sm, cfg)
-			}
-			return executeSequential(matchedContexts, commandArgs, flags.namespace, sm, cfg)
+			return o.Run()
 		},
 	}
 
-	cmd.Flags().StringVarP(&flags.namespace, "namespace", "n", "default", "Namespace to use for all contexts")
-	cmd.Flags().BoolVar(&flags.regex, "regex", false, "Use regex pattern matching instead of glob-style wildcards")
-	cmd.Flags().BoolVarP(&flags.parallel, "parallel", "p", false, "Execute commands in parallel across all contexts")
-	cmd.Flags().BoolVar(&flags.dryRun, "dry-run", false, "Show which contexts would be used without executing the command")
+	cmd.Flags().StringVarP(&o.Namespace, "namespace", "n", "default", "Namespace to use for all contexts")
+	cmd.Flags().BoolVar(&o.Regex, "regex", false, "Use regex pattern matching instead of glob-style wildcards")
+	cmd.Flags().BoolVarP(&o.Parallel, "parallel", "p", false, "Execute commands in parallel across all contexts")
+	cmd.Flags().BoolVar(&o.DryRun, "dry-run", false, "Show which contexts would be used without executing the command")
 
 	return cmd
+}
+
+// Complete parses arguments and sets up IO
+func (o *ExecOptions) Complete(cmd *cobra.Command, args []string) error {
+	o.Out = cmd.OutOrStdout()
+	o.ErrOut = cmd.ErrOrStderr()
+
+	dashIdx := cmd.ArgsLenAtDash()
+	switch dashIdx {
+	case -1:
+		return fmt.Errorf("missing '--' separator between patterns and command")
+	case 0:
+		o.Patterns = []string{}
+		o.CommandArgs = args
+	default:
+		o.Patterns = args[:dashIdx]
+		o.CommandArgs = args[dashIdx:]
+	}
+
+	return nil
+}
+
+// Validate checks the consistency of the options
+func (o *ExecOptions) Validate() error {
+	if len(o.CommandArgs) == 0 {
+		return fmt.Errorf("no command provided after '--'")
+	}
+
+	if len(o.Patterns) == 0 && !o.IsInteractive() {
+		return fmt.Errorf("patterns are required in non-interactive mode")
+	}
+
+	return nil
+}
+
+// Run contains the main logic
+func (o *ExecOptions) Run() error {
+	// 1. Load Contexts
+	contexts, err := o.ContextLoader()
+	if err != nil {
+		return fmt.Errorf("error loading contexts: %w", err)
+	}
+
+	var matchedContexts []kubeconfig.Context
+
+	// 2. Select or Filter Contexts
+	if len(o.Patterns) == 0 {
+		// Interactive Selection
+		contextNames := getContextNames(contexts)
+		sort.Strings(contextNames)
+
+		selectedNames, err := o.Selector(contextNames)
+		if err != nil {
+			return fmt.Errorf("context selection cancelled or failed: %w", err)
+		}
+
+		if len(selectedNames) == 0 {
+			return fmt.Errorf("no contexts selected")
+		}
+
+		// Map names back to context objects
+		for _, name := range selectedNames {
+			if ctx, found := findContextByName(contexts, name); found {
+				matchedContexts = append(matchedContexts, ctx)
+			}
+		}
+	} else {
+		// Pattern Matching
+		matchedContexts, err = filterContextsByPatterns(contexts, o.Patterns, o.Regex)
+		if err != nil {
+			return fmt.Errorf("error filtering contexts: %w", err)
+		}
+
+		if len(matchedContexts) == 0 {
+			return fmt.Errorf("no contexts matched the patterns: %s", strings.Join(o.Patterns, ", "))
+		}
+	}
+
+	// 3. Setup State Manager
+	sm, err := o.StateManager()
+	if err != nil {
+		return fmt.Errorf("error creating state manager: %w", err)
+	}
+
+	// 4. Execute
+	if o.DryRun {
+		return showDryRun(o.Out, matchedContexts, o.CommandArgs, o.Namespace, sm, o.Config)
+	}
+
+	fmt.Fprintf(o.Out, "Executing command against %d context(s):\n", len(matchedContexts))
+	for _, ctx := range matchedContexts {
+		fmt.Fprintf(o.Out, "  - %s\n", ctx.Name)
+	}
+	fmt.Fprintln(o.Out)
+
+	if o.Parallel {
+		return executeParallel(o.Out, matchedContexts, o.CommandArgs, o.Namespace, sm, o.Config)
+	}
+	return executeSequential(o.Out, matchedContexts, o.CommandArgs, o.Namespace, sm, o.Config)
+}
+
+type contextExecResult struct {
+	contextName string
+	output      string
+	err         error
 }
 
 func filterContextsByPatterns(contexts []kubeconfig.Context, patterns []string, useRegex bool) ([]kubeconfig.Context, error) {
@@ -226,16 +276,16 @@ func globToRegex(pattern string) string {
 	return "^" + pattern + "$"
 }
 
-func executeSequential(contexts []kubeconfig.Context, args []string, namespace string, sm *state.Manager, cfg config.Config) error {
+func executeSequential(out io.Writer, contexts []kubeconfig.Context, args []string, namespace string, sm *state.Manager, cfg config.Config) error {
 	hasErrors := false
 
 	for i, ctx := range contexts {
 		if i > 0 {
-			fmt.Println()
+			fmt.Fprintln(out)
 		}
 
 		result := executeInContext(ctx, args, namespace, sm, cfg)
-		printResult(result)
+		printResult(out, result)
 
 		if result.err != nil {
 			hasErrors = true
@@ -249,8 +299,9 @@ func executeSequential(contexts []kubeconfig.Context, args []string, namespace s
 	return nil
 }
 
-func executeParallel(contexts []kubeconfig.Context, args []string, namespace string, sm *state.Manager, cfg config.Config) error {
+func executeParallel(out io.Writer, contexts []kubeconfig.Context, args []string, namespace string, sm *state.Manager, cfg config.Config) error {
 	var wg sync.WaitGroup
+
 	resultsChan := make(chan contextExecResult, len(contexts))
 
 	for _, ctx := range contexts {
@@ -277,9 +328,9 @@ func executeParallel(contexts []kubeconfig.Context, args []string, namespace str
 	hasErrors := false
 	for i, result := range results {
 		if i > 0 {
-			fmt.Println()
+			fmt.Fprintln(out)
 		}
-		printResult(result)
+		printResult(out, result)
 		if result.err != nil {
 			hasErrors = true
 		}
@@ -340,39 +391,39 @@ func runCommand(args []string, kubeconfigPath string) (string, error) {
 	return string(output), err
 }
 
-func printResult(result contextExecResult) {
+func printResult(out io.Writer, result contextExecResult) {
 	separator := strings.Repeat("=", 80)
 	contextHeader := fmt.Sprintf("Context: %s", result.contextName)
 
-	fmt.Println(separator)
-	fmt.Println(contextHeader)
-	fmt.Println(separator)
+	fmt.Fprintln(out, separator)
+	fmt.Fprintln(out, contextHeader)
+	fmt.Fprintln(out, separator)
 
 	if result.err != nil {
 		red := color.New(color.FgRed).SprintFunc()
-		fmt.Printf("%s: %v\n", red("ERROR"), result.err)
+		fmt.Fprintf(out, "%s: %v\n", red("ERROR"), result.err)
 		if result.output != "" {
-			fmt.Println(result.output)
+			fmt.Fprintln(out, result.output)
 		}
 	} else {
-		fmt.Print(result.output)
+		fmt.Fprint(out, result.output)
 	}
 }
 
-func showDryRun(contexts []kubeconfig.Context, args []string, namespace string, sm *state.Manager, cfg config.Config) error {
+func showDryRun(out io.Writer, contexts []kubeconfig.Context, args []string, namespace string, sm *state.Manager, cfg config.Config) error {
 	yellow := color.New(color.FgYellow).SprintFunc()
 	green := color.New(color.FgGreen).SprintFunc()
 
-	fmt.Println("=== DRY RUN ===")
-	fmt.Println()
-	fmt.Printf("Command: %s\n", strings.Join(args, " "))
+	fmt.Fprintln(out, "=== DRY RUN ===")
+	fmt.Fprintln(out)
+	fmt.Fprintf(out, "Command: %s\n", strings.Join(args, " "))
 	if namespace != "" {
-		fmt.Printf("Namespace: %s\n", namespace)
+		fmt.Fprintf(out, "Namespace: %s\n", namespace)
 	}
-	fmt.Printf("Total contexts: %d\n", len(contexts))
-	fmt.Println()
+	fmt.Fprintf(out, "Total contexts: %d\n", len(contexts))
+	fmt.Fprintln(out)
 
-	fmt.Println("Contexts to execute against:")
+	fmt.Fprintln(out, "Contexts to execute against:")
 	for _, ctx := range contexts {
 		locked, err := isContextProtected(sm, ctx.Name, cfg)
 		if err != nil {
@@ -391,7 +442,7 @@ func showDryRun(contexts []kubeconfig.Context, args []string, namespace string, 
 			}
 		}
 
-		fmt.Printf("  %s %s%s\n", status, ctx.Name, statusText)
+		fmt.Fprintf(out, "  %s %s%s\n", status, ctx.Name, statusText)
 	}
 
 	return nil

@@ -116,7 +116,7 @@ func selectContextName(args []string, contextNames []string, sm *state.Manager) 
 		}
 		return args[0], nil
 	}
-	if !fzf.IsInteractiveShell() {
+	if !fzf.IsInteractive() {
 		printContextNames(contextNames)
 		return "", nil
 	}
