@@ -166,7 +166,9 @@ func TestLaunchShellWithKubeconfig(t *testing.T) {
 
 		// 2. TODO: simulate running kubert commands either by binary or by directly calling the logic
 
-		if err := runNamespaceCommand([]string{"default"}); err != nil {
+		o := NewNamespaceOptions()
+		o.Args = []string{"default"}
+		if err := o.Run(); err != nil {
 			fmt.Fprintf(os.Stderr, "Failed to run namespace command: %v\n", err)
 			os.Exit(1)
 		}

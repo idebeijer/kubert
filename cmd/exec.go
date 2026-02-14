@@ -142,54 +142,21 @@ func (o *ExecOptions) Validate() error {
 }
 
 func (o *ExecOptions) Run() error {
-	// 1. Load Contexts
 	contexts, err := o.ContextLoader()
 	if err != nil {
 		return fmt.Errorf("error loading contexts: %w", err)
 	}
 
-	var matchedContexts []kubeconfig.Context
-
-	// 2. Select or Filter Contexts
-	if len(o.Patterns) == 0 {
-		// Interactive Selection
-		contextNames := getContextNames(contexts)
-		sort.Strings(contextNames)
-
-		selectedNames, err := o.Selector(contextNames)
-		if err != nil {
-			return fmt.Errorf("context selection cancelled or failed: %w", err)
-		}
-
-		if len(selectedNames) == 0 {
-			return fmt.Errorf("no contexts selected")
-		}
-
-		// Map names back to context objects
-		for _, name := range selectedNames {
-			if ctx, found := findContextByName(contexts, name); found {
-				matchedContexts = append(matchedContexts, ctx)
-			}
-		}
-	} else {
-		// Pattern Matching
-		matchedContexts, err = filterContextsByPatterns(contexts, o.Patterns, o.Regex)
-		if err != nil {
-			return fmt.Errorf("error filtering contexts: %w", err)
-		}
-
-		if len(matchedContexts) == 0 {
-			return fmt.Errorf("no contexts matched the patterns: %s", strings.Join(o.Patterns, ", "))
-		}
+	matchedContexts, err := o.resolveContexts(contexts)
+	if err != nil {
+		return err
 	}
 
-	// 3. Setup State Manager
 	sm, err := o.StateManager()
 	if err != nil {
 		return fmt.Errorf("error creating state manager: %w", err)
 	}
 
-	// 4. Execute
 	if o.DryRun {
 		return showDryRun(o.Out, matchedContexts, o.CommandArgs, o.Namespace, sm, o.Config)
 	}
@@ -204,6 +171,46 @@ func (o *ExecOptions) Run() error {
 		return executeParallel(o.Out, matchedContexts, o.CommandArgs, o.Namespace, sm, o.Config)
 	}
 	return executeSequential(o.Out, matchedContexts, o.CommandArgs, o.Namespace, sm, o.Config)
+}
+
+func (o *ExecOptions) resolveContexts(contexts []kubeconfig.Context) ([]kubeconfig.Context, error) {
+	if len(o.Patterns) == 0 {
+		return o.resolveInteractive(contexts)
+	}
+
+	matched, err := filterContextsByPatterns(contexts, o.Patterns, o.Regex)
+	if err != nil {
+		return nil, fmt.Errorf("error filtering contexts: %w", err)
+	}
+
+	if len(matched) == 0 {
+		return nil, fmt.Errorf("no contexts matched the patterns: %s", strings.Join(o.Patterns, ", "))
+	}
+
+	return matched, nil
+}
+
+func (o *ExecOptions) resolveInteractive(contexts []kubeconfig.Context) ([]kubeconfig.Context, error) {
+	contextNames := getContextNames(contexts)
+	sort.Strings(contextNames)
+
+	selectedNames, err := o.Selector(contextNames)
+	if err != nil {
+		return nil, fmt.Errorf("context selection cancelled or failed: %w", err)
+	}
+
+	if len(selectedNames) == 0 {
+		return nil, fmt.Errorf("no contexts selected")
+	}
+
+	var matched []kubeconfig.Context
+	for _, name := range selectedNames {
+		if ctx, found := findContextByName(contexts, name); found {
+			matched = append(matched, ctx)
+		}
+	}
+
+	return matched, nil
 }
 
 type contextExecResult struct {
