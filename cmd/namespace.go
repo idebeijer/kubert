@@ -147,7 +147,7 @@ func createKubernetesClient() (*kubernetes.Clientset, error) {
 	return kubernetes.NewForConfig(cfg)
 }
 
-func listNamespaces(ctx context.Context, clientset *kubernetes.Clientset) ([]string, error) {
+func listNamespaces(ctx context.Context, clientset kubernetes.Interface) ([]string, error) {
 	namespaces, err := clientset.CoreV1().Namespaces().List(ctx, metav1.ListOptions{})
 	if err != nil {
 		return nil, err
