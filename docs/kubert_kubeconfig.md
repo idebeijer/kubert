@@ -1,6 +1,6 @@
 ## kubert kubeconfig
 
-Kubeconfig command
+Manage and inspect kubeconfig files
 
 ### Options
 
@@ -19,5 +19,5 @@ Kubeconfig command
 
 * [kubert](kubert.md)	 - kubert is a tool to switch kubernetes contexts and namespaces
 * [kubert kubeconfig lint](kubert_kubeconfig_lint.md)	 - Lint kubeconfig files for errors and issues
-* [kubert kubeconfig list](kubert_kubeconfig_list.md)	 - 
+* [kubert kubeconfig list](kubert_kubeconfig_list.md)	 - List all kubeconfig files being used
 

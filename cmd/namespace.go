@@ -56,9 +56,14 @@ func NewNamespaceCommand() *cobra.Command {
 	o := NewNamespaceOptions()
 
 	cmd := &cobra.Command{
-		Use:     "ns",
-		Short:   "Switch to a different namespace",
-		Long:    `Switch to a different namespace in the current Kubert shell. Other shells with the same context will not be affected.`,
+		Use:   "ns",
+		Short: "Switch to a different namespace",
+		Long:  `Switch to a different namespace in the current Kubert shell. Other shells with the same context will not be affected.`,
+		Example: `  # Select a namespace interactively
+  kubert ns
+
+  # Switch to a specific namespace
+  kubert ns kube-system`,
 		Aliases: []string{"namespace"},
 		PreRunE: func(cmd *cobra.Command, args []string) error {
 			return kubert.ShellPreFlightCheck()

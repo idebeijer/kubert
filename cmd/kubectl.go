@@ -73,7 +73,6 @@ func NewKubectlCommand() *cobra.Command {
 		Short:              "Wrapper for kubectl",
 		Long:               `Wrapper for kubectl, to support context protection with "kubert context-protection".`,
 		DisableFlagParsing: true,
-		Aliases:            []string{"namespace"},
 		PreRunE: func(cmd *cobra.Command, args []string) error {
 			_, err := exec.LookPath("kubectl")
 			if err != nil {

@@ -22,5 +22,5 @@ Manage kubert configuration file.
 ### SEE ALSO
 
 * [kubert](kubert.md)	 - kubert is a tool to switch kubernetes contexts and namespaces
-* [kubert config edit](kubert_config_edit.md)	 - Edit the kubert config file in vim
+* [kubert config edit](kubert_config_edit.md)	 - Edit the kubert config file in your editor
 

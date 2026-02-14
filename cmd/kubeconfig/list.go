@@ -3,9 +3,10 @@ package kubeconfig
 import (
 	"fmt"
 
+	"github.com/spf13/cobra"
+
 	"github.com/idebeijer/kubert/internal/config"
 	"github.com/idebeijer/kubert/internal/kubeconfig"
-	"github.com/spf13/cobra"
 )
 
 func addListFlags(cmd *cobra.Command) {}
@@ -13,7 +14,7 @@ func addListFlags(cmd *cobra.Command) {}
 func NewListCommand() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "list",
-		Short: "",
+		Short: "List all kubeconfig files being used",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			cfg := config.Cfg
 

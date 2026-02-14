@@ -28,5 +28,5 @@ kubert kubeconfig lint [file...] [flags]
 
 ### SEE ALSO
 
-* [kubert kubeconfig](kubert_kubeconfig.md)	 - Kubeconfig command
+* [kubert kubeconfig](kubert_kubeconfig.md)	 - Manage and inspect kubeconfig files
 

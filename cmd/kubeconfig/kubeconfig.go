@@ -10,7 +10,7 @@ func initFlags(cmd *cobra.Command) {
 func NewCommand() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "kubeconfig",
-		Short: "Kubeconfig command",
+		Short: "Manage and inspect kubeconfig files",
 	}
 
 	initFlags(cmd)

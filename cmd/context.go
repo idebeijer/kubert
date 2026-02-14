@@ -304,7 +304,7 @@ func launchShellWithKubeconfig(kubeconfigPath, originalKubeconfigPath, contextNa
 
 	if shellErr != nil {
 		if exitErr, ok := shellErr.(*exec.ExitError); ok && exitErr.ExitCode() == 130 {
-			return nil // Exit code 130 means the user exited the shell with Ctrl+D, so we don't return an error
+			return nil // Exit code 130 means the shell received SIGINT (Ctrl+C), not an error
 		}
 		return fmt.Errorf("failed to launch shell: %w", shellErr)
 	}

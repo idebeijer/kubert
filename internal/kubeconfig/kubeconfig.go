@@ -5,10 +5,11 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
-	"strings"
 
 	"k8s.io/client-go/tools/clientcmd"
 	"k8s.io/client-go/tools/clientcmd/api"
+
+	"github.com/idebeijer/kubert/internal/util"
 )
 
 // WithPath struct to hold the kubeconfig and its file path
@@ -65,27 +66,10 @@ func (f *FileSystemProvider) Load() ([]WithPath, error) {
 	return kubeconfigs, nil
 }
 
-func expandPath(path string) (string, error) {
-	// Expand environment variables first
-	path = os.ExpandEnv(path)
-
-	if strings.HasPrefix(path, "~") {
-		home, err := os.UserHomeDir()
-		if err != nil {
-			return "", fmt.Errorf("failed to get home directory for path %s: %w", path, err)
-		}
-		if path == "~" {
-			return home, nil
-		}
-		return filepath.Join(home, path[2:]), nil
-	}
-	return path, nil
-}
-
 func findFiles(patterns []string) ([]string, error) {
 	var files []string
 	for _, pattern := range patterns {
-		expandedPattern, err := expandPath(pattern)
+		expandedPattern, err := util.ExpandPath(pattern)
 		if err != nil {
 			return nil, fmt.Errorf("failed to expand pattern %s: %w", pattern, err)
 		}
@@ -102,7 +86,7 @@ func filterFiles(files []string, excludePatterns []string) ([]string, error) {
 	var filteredFiles []string
 	excludeMap := make(map[string]bool)
 	for _, pattern := range excludePatterns {
-		expandedPattern, err := expandPath(pattern)
+		expandedPattern, err := util.ExpandPath(pattern)
 		if err != nil {
 			return nil, fmt.Errorf("failed to expand exclude pattern %s: %w", pattern, err)
 		}

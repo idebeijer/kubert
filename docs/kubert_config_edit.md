@@ -1,10 +1,12 @@
 ## kubert config edit
 
-Edit the kubert config file in vim
+Edit the kubert config file in your editor
 
 ### Synopsis
 
-Open the kubert config file in vim editor for editing.
+Open the kubert config file in your preferred editor for editing.
+
+The editor is chosen from the $EDITOR or $VISUAL environment variable, falling back to vim.
 
 ```
 kubert config edit [flags]

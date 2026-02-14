@@ -17,8 +17,10 @@ func NewEditCommand() *cobra.Command {
 
 	cmd := &cobra.Command{
 		Use:   "edit",
-		Short: "Edit the kubert config file in vim",
-		Long:  `Open the kubert config file in vim editor for editing.`,
+		Short: "Edit the kubert config file in your editor",
+		Long: `Open the kubert config file in your preferred editor for editing.
+
+The editor is chosen from the $EDITOR or $VISUAL environment variable, falling back to vim.`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			var configFile string
 
@@ -56,13 +58,21 @@ func NewEditCommand() *cobra.Command {
 				}
 			}
 
-			vimCmd := exec.Command("vim", configFile)
-			vimCmd.Stdin = os.Stdin
-			vimCmd.Stdout = os.Stdout
-			vimCmd.Stderr = os.Stderr
+			editor := os.Getenv("VISUAL")
+			if editor == "" {
+				editor = os.Getenv("EDITOR")
+			}
+			if editor == "" {
+				editor = "vim"
+			}
 
-			if err := vimCmd.Run(); err != nil {
-				return fmt.Errorf("failed to open vim: %w", err)
+			editorCmd := exec.Command(editor, configFile)
+			editorCmd.Stdin = os.Stdin
+			editorCmd.Stdout = os.Stdout
+			editorCmd.Stderr = os.Stderr
+
+			if err := editorCmd.Run(); err != nil {
+				return fmt.Errorf("failed to open editor (%s): %w", editor, err)
 			}
 
 			return nil

@@ -101,7 +101,7 @@ you can select multiple contexts interactively (use Tab/Shift-Tab to select).`,
 		},
 	}
 
-	cmd.Flags().StringVarP(&o.Namespace, "namespace", "n", "default", "Namespace to use for all contexts")
+	cmd.Flags().StringVarP(&o.Namespace, "namespace", "n", "", "Namespace to use for all contexts (defaults to each context's configured namespace)")
 	cmd.Flags().BoolVar(&o.Regex, "regex", false, "Use regex pattern matching instead of glob-style wildcards")
 	cmd.Flags().BoolVarP(&o.Parallel, "parallel", "p", false, "Execute commands in parallel across all contexts")
 	cmd.Flags().BoolVar(&o.DryRun, "dry-run", false, "Show which contexts would be used without executing the command")
@@ -359,13 +359,8 @@ func executeInContext(ctx kubeconfig.Context, args []string, namespace string, s
 	}
 
 	if locked {
-		if !cfg.Protection.Prompt {
-			result.err = fmt.Errorf("context is protected and prompt is disabled")
-			return result
-		}
-
 		yellow := color.New(color.FgHiYellow).SprintFunc()
-		result.output = fmt.Sprintf("%s: context %s is protected, skipping...\n", yellow("WARNING"), ctx.Name)
+		result.err = fmt.Errorf("%s: context %s is protected, skipping", yellow("WARNING"), ctx.Name)
 		return result
 	}
 

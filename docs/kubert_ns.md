@@ -10,6 +10,16 @@ Switch to a different namespace in the current Kubert shell. Other shells with t
 kubert ns [flags]
 ```
 
+### Examples
+
+```
+  # Select a namespace interactively
+  kubert ns
+
+  # Switch to a specific namespace
+  kubert ns kube-system
+```
+
 ### Options
 
 ```

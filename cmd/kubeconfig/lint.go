@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"strings"
 
 	"github.com/spf13/cobra"
 	"k8s.io/client-go/tools/clientcmd"
@@ -12,6 +11,7 @@ import (
 
 	"github.com/idebeijer/kubert/internal/config"
 	"github.com/idebeijer/kubert/internal/kubeconfig"
+	"github.com/idebeijer/kubert/internal/util"
 )
 
 type lintResult struct {
@@ -61,8 +61,7 @@ If file paths are provided as arguments (including glob patterns), only those fi
 
 			results := lintFiles(filesToLint)
 
-			printLintResults(results)
-			return nil
+			return printLintResults(results)
 		},
 	}
 
@@ -73,7 +72,7 @@ If file paths are provided as arguments (including glob patterns), only those fi
 func expandGlobs(patterns []string) ([]string, error) {
 	var files []string
 	for _, pattern := range patterns {
-		expandedPattern, err := expandPath(pattern)
+		expandedPattern, err := util.ExpandPath(pattern)
 		if err != nil {
 			return nil, err
 		}
@@ -91,24 +90,6 @@ func expandGlobs(patterns []string) ([]string, error) {
 		}
 	}
 	return files, nil
-}
-
-// expandPath expands ~ and environment variables in file paths
-func expandPath(path string) (string, error) {
-	// Expand environment variables first
-	path = os.ExpandEnv(path)
-
-	if strings.HasPrefix(path, "~") {
-		home, err := os.UserHomeDir()
-		if err != nil {
-			return "", fmt.Errorf("failed to get home directory for path %s: %w", path, err)
-		}
-		if path == "~" {
-			return home, nil
-		}
-		return filepath.Join(home, path[2:]), nil
-	}
-	return path, nil
 }
 
 func lintFiles(files []string) []lintResult {
@@ -237,10 +218,10 @@ func validateCurrentContext(cfg *api.Config, result *lintResult) {
 	}
 }
 
-func printLintResults(results []lintResult) {
+func printLintResults(results []lintResult) error {
 	if len(results) == 0 {
 		fmt.Println("No kubeconfig files found to lint")
-		return
+		return nil
 	}
 
 	hasErrors := false
@@ -271,11 +252,12 @@ func printLintResults(results []lintResult) {
 
 	fmt.Println()
 	if hasErrors {
-		fmt.Println("Linting completed with errors")
-		os.Exit(1)
+		return fmt.Errorf("linting completed with errors")
 	} else if hasWarnings {
 		fmt.Println("Linting completed with warnings")
 	} else {
 		fmt.Println("All kubeconfig files are valid!")
 	}
+
+	return nil
 }
