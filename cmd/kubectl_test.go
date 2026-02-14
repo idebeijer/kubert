@@ -3,7 +3,6 @@ package cmd
 import (
 	"bytes"
 	"errors"
-	"os"
 	"strings"
 	"testing"
 
@@ -13,6 +12,30 @@ import (
 	"github.com/idebeijer/kubert/internal/config"
 	"github.com/idebeijer/kubert/internal/state"
 )
+
+func TestKubectlOptions_Complete_SetsConfig(t *testing.T) {
+	original := config.Cfg
+	defer func() { config.Cfg = original }()
+
+	config.Cfg = config.Config{
+		Protection: config.Protection{
+			Commands: []string{"apply", "delete"},
+		},
+	}
+
+	o := NewKubectlOptions()
+	cmd := &cobra.Command{}
+
+	if len(o.Config.Protection.Commands) != 0 {
+		t.Error("Config should not be set before Complete()")
+	}
+
+	_ = o.Complete(cmd, []string{"get", "pods"})
+
+	if len(o.Config.Protection.Commands) != 2 {
+		t.Errorf("Complete() should set Config from config.Cfg, got: %+v", o.Config.Protection.Commands)
+	}
+}
 
 func TestIsCommandProtected(t *testing.T) {
 	tests := []struct {
@@ -65,14 +88,8 @@ func TestIsCommandProtected(t *testing.T) {
 }
 
 func TestIsContextProtected(t *testing.T) {
-	// TODO: Refactor isContextProtected to accept an interface for better testability. Currently requires real state manager and config.
-
 	t.Run("context not in state, matches regex", func(t *testing.T) {
-		// Create a temporary state for testing
-		tempDir := t.TempDir()
-		oldXDG := os.Getenv("XDG_DATA_HOME")
-		_ = os.Setenv("XDG_DATA_HOME", tempDir)
-		defer func() { _ = os.Setenv("XDG_DATA_HOME", oldXDG) }()
+		setupTestXDGDataHome(t)
 
 		sm, err := state.NewManager()
 		if err != nil {
@@ -106,10 +123,7 @@ func TestIsContextProtected(t *testing.T) {
 	})
 
 	t.Run("invalid regex", func(t *testing.T) {
-		tempDir := t.TempDir()
-		oldXDG := os.Getenv("XDG_DATA_HOME")
-		_ = os.Setenv("XDG_DATA_HOME", tempDir)
-		defer func() { _ = os.Setenv("XDG_DATA_HOME", oldXDG) }()
+		setupTestXDGDataHome(t)
 
 		sm, err := state.NewManager()
 		if err != nil {
@@ -200,11 +214,7 @@ func TestKubectlOptions_Run_Unprotected(t *testing.T) {
 			},
 		},
 		StateManager: func() (*state.Manager, error) {
-			// Create temp state for testing
-			tempDir := t.TempDir()
-			oldXDG := os.Getenv("XDG_DATA_HOME")
-			_ = os.Setenv("XDG_DATA_HOME", tempDir)
-			t.Cleanup(func() { _ = os.Setenv("XDG_DATA_HOME", oldXDG) })
+			setupTestXDGDataHome(t)
 			return state.NewManager()
 		},
 		ClientConfigLoader: func() (*api.Config, error) {
@@ -248,10 +258,7 @@ func TestKubectlOptions_Run_ProtectedWithPromptDisabled(t *testing.T) {
 			},
 		},
 		StateManager: func() (*state.Manager, error) {
-			tempDir := t.TempDir()
-			oldXDG := os.Getenv("XDG_DATA_HOME")
-			_ = os.Setenv("XDG_DATA_HOME", tempDir)
-			t.Cleanup(func() { _ = os.Setenv("XDG_DATA_HOME", oldXDG) })
+			setupTestXDGDataHome(t)
 			return state.NewManager()
 		},
 		ClientConfigLoader: func() (*api.Config, error) {

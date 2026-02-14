@@ -19,7 +19,45 @@ import (
 	"github.com/idebeijer/kubert/internal/state"
 )
 
+type ContextOptions struct {
+	Out    io.Writer
+	ErrOut io.Writer
+
+	Args []string
+
+	Config         config.Config
+	ContextLoader  func() ([]kubeconfig.Context, error)
+	StateManager   func() (*state.Manager, error)
+	Selector       func([]string) (string, error)
+	IsInteractive  func() bool
+	ShellLauncher  func(kubeconfigPath, originalPath, contextName string, cfg config.Config) error
+	TempFileWriter func(kubeconfigPath, contextName, namespace string) (*os.File, func(), error)
+}
+
+func NewContextOptions() *ContextOptions {
+	return &ContextOptions{
+		Out:    os.Stdout,
+		ErrOut: os.Stderr,
+
+		ContextLoader: func() ([]kubeconfig.Context, error) {
+			cfg := config.Cfg
+			fsProvider := kubeconfig.NewFileSystemProvider(cfg.KubeconfigPaths.Include, cfg.KubeconfigPaths.Exclude)
+			loader := kubeconfig.NewLoader(kubeconfig.WithProvider(fsProvider))
+			return loader.LoadContexts()
+		},
+		StateManager:  state.NewManager,
+		Selector:      fzf.Select,
+		IsInteractive: fzf.IsInteractive,
+		ShellLauncher: func(kubeconfigPath, originalPath, contextName string, cfg config.Config) error {
+			return launchShellWithKubeconfig(kubeconfigPath, originalPath, contextName, cfg)
+		},
+		TempFileWriter: createTempKubeconfigFile,
+	}
+}
+
 func NewContextCommand() *cobra.Command {
+	o := NewContextOptions()
+
 	cmd := &cobra.Command{
 		Use:   "ctx [context-name | -]",
 		Short: "Spawn a shell with the selected context",
@@ -39,27 +77,38 @@ Use '-' to switch to the previously selected context.`,
 		SilenceUsage:      true,
 		ValidArgsFunction: validContextArgsFunction,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return runContextCommand(args)
+			if err := o.Complete(cmd, args); err != nil {
+				return err
+			}
+			if err := o.Validate(); err != nil {
+				return err
+			}
+			return o.Run()
 		},
 	}
 
 	return cmd
 }
 
-func runContextCommand(args []string) error {
-	cfg := config.Cfg
+func (o *ContextOptions) Complete(cmd *cobra.Command, args []string) error {
+	o.Out = cmd.OutOrStdout()
+	o.ErrOut = cmd.ErrOrStderr()
+	o.Args = args
+	o.Config = config.Cfg
+	return nil
+}
 
-	fsProvider := kubeconfig.NewFileSystemProvider(cfg.KubeconfigPaths.Include, cfg.KubeconfigPaths.Exclude)
-	loader := kubeconfig.NewLoader(
-		kubeconfig.WithProvider(fsProvider),
-	)
+func (o *ContextOptions) Validate() error {
+	return nil
+}
 
-	sm, err := state.NewManager()
+func (o *ContextOptions) Run() error {
+	sm, err := o.StateManager()
 	if err != nil {
 		return fmt.Errorf("error creating state manager: %w", err)
 	}
 
-	contexts, err := loader.LoadContexts()
+	contexts, err := o.ContextLoader()
 	if err != nil {
 		return fmt.Errorf("error loading contexts: %w", err)
 	}
@@ -68,7 +117,7 @@ func runContextCommand(args []string) error {
 	contextNames := getContextNames(contexts)
 	sort.Strings(contextNames)
 
-	selectedContextName, err := selectContextName(args, contextNames, sm)
+	selectedContextName, err := o.selectContextName(contextNames, sm)
 	if err != nil {
 		return err
 	}
@@ -82,7 +131,7 @@ func runContextCommand(args []string) error {
 	}
 
 	contextInState, _ := sm.ContextInfo(selectedContextName)
-	tempKubeconfig, cleanup, err := createTempKubeconfigFile(selectedContext.FilePath, selectedContextName, contextInState.LastNamespace)
+	tempKubeconfig, cleanup, err := o.TempFileWriter(selectedContext.FilePath, selectedContextName, contextInState.LastNamespace)
 	if err != nil {
 		return err
 	}
@@ -94,7 +143,34 @@ func runContextCommand(args []string) error {
 		slog.Warn("Failed to save last context", "error", err)
 	}
 
-	return launchShellWithKubeconfig(tempKubeconfig.Name(), selectedContext.FilePath, selectedContextName, cfg)
+	return o.ShellLauncher(tempKubeconfig.Name(), selectedContext.FilePath, selectedContextName, o.Config)
+}
+
+func (o *ContextOptions) selectContextName(contextNames []string, sm *state.Manager) (string, error) {
+	if len(o.Args) > 0 {
+		if o.Args[0] != "-" {
+			return o.Args[0], nil
+		}
+
+		lastContext, exists := sm.GetLastContext()
+		if !exists {
+			return "", fmt.Errorf("no previous context found")
+		}
+		return lastContext, nil
+	}
+
+	if !o.IsInteractive() {
+		o.printContextNames(contextNames)
+		return "", nil
+	}
+
+	return o.Selector(contextNames)
+}
+
+func (o *ContextOptions) printContextNames(contextNames []string) {
+	for _, name := range contextNames {
+		fmt.Fprintln(o.Out, name)
+	}
 }
 
 func getContextNames(contexts []kubeconfig.Context) []string {
@@ -103,30 +179,6 @@ func getContextNames(contexts []kubeconfig.Context) []string {
 		names = append(names, context.Name)
 	}
 	return names
-}
-
-func selectContextName(args []string, contextNames []string, sm *state.Manager) (string, error) {
-	if len(args) > 0 {
-		if args[0] == "-" {
-			lastContext, exists := sm.GetLastContext()
-			if !exists {
-				return "", fmt.Errorf("no previous context found")
-			}
-			return lastContext, nil
-		}
-		return args[0], nil
-	}
-	if !fzf.IsInteractive() {
-		printContextNames(contextNames)
-		return "", nil
-	}
-	return fzf.Select(contextNames)
-}
-
-func printContextNames(contextNames []string) {
-	for _, name := range contextNames {
-		fmt.Println(name)
-	}
 }
 
 func findContextByName(contexts []kubeconfig.Context, name string) (kubeconfig.Context, bool) {

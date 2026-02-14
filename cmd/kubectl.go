@@ -38,7 +38,6 @@ func NewKubectlOptions() *KubectlOptions {
 	return &KubectlOptions{
 		Out:    os.Stdout,
 		ErrOut: os.Stderr,
-		Config: config.Cfg,
 
 		StateManager: state.NewManager,
 		ClientConfigLoader: func() (*api.Config, error) {
@@ -99,20 +98,18 @@ func NewKubectlCommand() *cobra.Command {
 	return cmd
 }
 
-// Complete parses arguments and sets up IO
 func (o *KubectlOptions) Complete(cmd *cobra.Command, args []string) error {
 	o.Out = cmd.OutOrStdout()
 	o.ErrOut = cmd.ErrOrStderr()
 	o.Args = args
+	o.Config = config.Cfg
 	return nil
 }
 
-// Validate checks that kubectl command can be executed
 func (o *KubectlOptions) Validate() error {
 	return nil
 }
 
-// Run contains the main kubectl wrapper logic
 func (o *KubectlOptions) Run() error {
 	sm, err := o.StateManager()
 	if err != nil {
@@ -189,12 +186,10 @@ func validKubectlArgsFunction(cmd *cobra.Command, args []string, toComplete stri
 }
 
 func isCommandProtected(args []string, blockedCmds []string) bool {
-	if len(args) > 0 {
-		if slices.Contains(blockedCmds, args[0]) {
-			return true
-		}
+	if len(args) == 0 {
+		return false
 	}
-	return false
+	return slices.Contains(blockedCmds, args[0])
 }
 
 func isContextProtected(sm *state.Manager, context string, cfg config.Config) (bool, error) {

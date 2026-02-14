@@ -42,7 +42,6 @@ func NewExecOptions() *ExecOptions {
 	return &ExecOptions{
 		Out:    os.Stdout,
 		ErrOut: os.Stderr,
-		Config: config.Cfg,
 
 		ContextLoader: func() ([]kubeconfig.Context, error) {
 			cfg := config.Cfg
@@ -110,10 +109,10 @@ you can select multiple contexts interactively (use Tab/Shift-Tab to select).`,
 	return cmd
 }
 
-// Complete parses arguments and sets up IO
 func (o *ExecOptions) Complete(cmd *cobra.Command, args []string) error {
 	o.Out = cmd.OutOrStdout()
 	o.ErrOut = cmd.ErrOrStderr()
+	o.Config = config.Cfg
 
 	dashIdx := cmd.ArgsLenAtDash()
 	switch dashIdx {
@@ -130,7 +129,6 @@ func (o *ExecOptions) Complete(cmd *cobra.Command, args []string) error {
 	return nil
 }
 
-// Validate checks the consistency of the options
 func (o *ExecOptions) Validate() error {
 	if len(o.CommandArgs) == 0 {
 		return fmt.Errorf("no command provided after '--'")
@@ -143,7 +141,6 @@ func (o *ExecOptions) Validate() error {
 	return nil
 }
 
-// Run contains the main logic
 func (o *ExecOptions) Run() error {
 	// 1. Load Contexts
 	contexts, err := o.ContextLoader()
