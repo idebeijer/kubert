@@ -25,9 +25,29 @@ builds:
       - "-X github.com/idebeijer/kubert/pkg/versions.Date={{ .Date }}"
       - "-X github.com/idebeijer/kubert/pkg/versions.BuiltBy=goreleaser"
 
+nfpms:
+  - package_name: kubert
+    maintainer: "Igor de Beijer <71566757+idebeijer@users.noreply.github.com>"
+    vendor: "Igor de Beijer"
+    homepage: "https://github.com/idebeijer/kubert"
+    description: "A kubectx and kubens alternative with context isolation, multi-cluster execution and more."
+    license: "MIT"
+    formats:
+      - deb
+      - rpm
+      - apk
+    contents:
+      - src: "completions/kubert.bash"
+        dst: "/usr/share/bash-completion/completions/kubert"
+      - src: "completions/kubert.zsh"
+        dst: "/usr/share/zsh/site-functions/_kubert"
+      - src: "completions/kubert.fish"
+        dst: "/usr/share/fish/vendor_completions.d/kubert.fish"
+
 archives:
   - id: completions
     files:
+      - LICENSE*
       - completions/*
 
 homebrew_casks:
@@ -46,6 +66,31 @@ homebrew_casks:
           if system_command("/usr/bin/xattr", args: ["-h"]).exit_status == 0
             system_command "/usr/bin/xattr", args: ["-dr", "com.apple.quarantine", "#{staged_path}/kubert"]
           end
+
+aurs:
+  - name: kubert-bin
+    homepage: "https://github.com/idebeijer/kubert"
+    description: "A kubectx and kubens alternative with context isolation, multi-cluster execution and more."
+    license: "MIT"
+    maintainers:
+      - "Igor de Beijer <71566757+idebeijer@users.noreply.github.com>"
+    git_url: "ssh://aur@aur.archlinux.org/kubert-bin.git"
+    private_key: "{{ .Env.AUR_KEY }}"
+    package: |-
+      # bin
+      install -Dm755 "kubert" "${pkgdir}/usr/bin/kubert"
+
+      # license
+      install -Dm644 "LICENSE" "${pkgdir}/usr/share/licenses/${pkgname}/LICENSE"
+
+      # completions
+      mkdir -p "${pkgdir}/usr/share/bash-completion/completions/"
+      mkdir -p "${pkgdir}/usr/share/zsh/site-functions/"
+      mkdir -p "${pkgdir}/usr/share/fish/vendor_completions.d/"
+
+      install -Dm644 "./completions/kubert.bash" "${pkgdir}/usr/share/bash-completion/completions/kubert"
+      install -Dm644 "./completions/kubert.zsh" "${pkgdir}/usr/share/zsh/site-functions/_kubert"
+      install -Dm644 "./completions/kubert.fish" "${pkgdir}/usr/share/fish/vendor_completions.d/kubert.fish"
 
 signs:
   - id: cosign

@@ -4,7 +4,7 @@ Wrapper for kubectl
 
 ### Synopsis
 
-Wrapper for kubectl, to support context protection with "kubert context-protection".
+Wrapper for kubectl, to support context protection with "kubert protection".
 
 ```
 kubert kubectl [flags]
