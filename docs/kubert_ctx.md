@@ -15,7 +15,7 @@ kubert ctx [context-name | -] [flags]
 
 ### Examples
 
-```
+```sh
   # Select a context interactively
   kubert ctx
 
