@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"encoding/json"
 	"fmt"
 	"io"
 	"os"
@@ -19,6 +20,30 @@ import (
 	"github.com/idebeijer/kubert/internal/state"
 )
 
+const outputJSON = "json"
+
+var execExample = `  # Run kubectl get pods in all production contexts
+  kubert exec "prod*" -- kubectl get pods
+
+  # Match multiple patterns
+  kubert exec "prod*" "staging*" -- kubectl get nodes
+
+  # Use regex to match specific patterns
+  kubert exec --regex "^(test|staging).*" -- kubectl get nodes
+
+  # Run in parallel across contexts
+  kubert exec "staging*" --parallel -- kubectl get deployments
+  
+  # Aggregate structured output across contexts into JSON array
+  kubert exec "prod*" -o json -- kubectl get nodes -o json | jq '.[].output.items[]?'
+
+  # Interactive multi-select (if fzf is available)
+  kubert exec -- kubectl get nodes
+  
+  # Dry run to see which contexts would be used
+  kubert exec "prod*" --dry-run -- kubectl get pods
+`
+
 type ExecOptions struct {
 	Out    io.Writer
 	ErrOut io.Writer
@@ -27,6 +52,7 @@ type ExecOptions struct {
 	Regex     bool
 	Parallel  bool
 	DryRun    bool
+	Output    string
 
 	Patterns    []string
 	CommandArgs []string
@@ -68,26 +94,7 @@ By default, uses glob-style wildcards (* and ?). Use --regex for regex patterns.
 
 If no patterns are provided and running in an interactive shell with fzf,
 you can select multiple contexts interactively (use Tab/Shift-Tab to select).`,
-		Example: `  # Run kubectl get pods in all production contexts
-  kubert exec "prod*" -- kubectl get pods
-
-  # Match multiple patterns
-  kubert exec "prod*" "staging*" -- kubectl get nodes
-
-  # Use regex to match specific patterns
-  kubert exec --regex "^(test|staging).*" -- kubectl get nodes
-
-  # Run in parallel across contexts
-  kubert exec "staging*" --parallel -- kubectl get deployments
-
-  # Specify namespace for all contexts
-  kubert exec "prod*" --namespace kube-system -- kubectl get pods
-  
-  # Interactive multi-select (if fzf is available)
-  kubert exec -- kubectl get nodes
-  
-  # Dry run to see which contexts will be used
-  kubert exec "prod*" --dry-run -- kubectl get pods`,
+		Example:      execExample,
 		SilenceUsage: true,
 		Args:         cobra.MinimumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -105,6 +112,7 @@ you can select multiple contexts interactively (use Tab/Shift-Tab to select).`,
 	cmd.Flags().BoolVar(&o.Regex, "regex", false, "Use regex pattern matching instead of glob-style wildcards")
 	cmd.Flags().BoolVarP(&o.Parallel, "parallel", "p", false, "Execute commands in parallel across all contexts")
 	cmd.Flags().BoolVar(&o.DryRun, "dry-run", false, "Show which contexts would be used without executing the command")
+	cmd.Flags().StringVarP(&o.Output, "output", "o", "", "Output format (e.g., 'json')")
 
 	return cmd
 }
@@ -138,6 +146,10 @@ func (o *ExecOptions) Validate() error {
 		return fmt.Errorf("patterns are required in non-interactive mode")
 	}
 
+	if o.Output != "" && o.Output != outputJSON {
+		return fmt.Errorf("invalid output format: %s. Only '%s' is supported", o.Output, outputJSON)
+	}
+
 	return nil
 }
 
@@ -161,16 +173,18 @@ func (o *ExecOptions) Run() error {
 		return showDryRun(o.Out, matchedContexts, o.CommandArgs, o.Namespace, sm, o.Config)
 	}
 
-	fmt.Fprintf(o.Out, "Executing command against %d context(s):\n", len(matchedContexts))
-	for _, ctx := range matchedContexts {
-		fmt.Fprintf(o.Out, "  - %s\n", ctx.Name)
+	if o.Output != outputJSON {
+		fmt.Fprintf(o.Out, "Executing command against %d context(s):\n", len(matchedContexts))
+		for _, ctx := range matchedContexts {
+			fmt.Fprintf(o.Out, "  - %s\n", ctx.Name)
+		}
+		fmt.Fprintln(o.Out)
 	}
-	fmt.Fprintln(o.Out)
 
 	if o.Parallel {
-		return executeParallel(o.Out, matchedContexts, o.CommandArgs, o.Namespace, sm, o.Config)
+		return executeParallel(o.Out, matchedContexts, o.CommandArgs, o.Namespace, sm, o.Config, o.Output)
 	}
-	return executeSequential(o.Out, matchedContexts, o.CommandArgs, o.Namespace, sm, o.Config)
+	return executeSequential(o.Out, matchedContexts, o.CommandArgs, o.Namespace, sm, o.Config, o.Output)
 }
 
 func (o *ExecOptions) resolveContexts(contexts []kubeconfig.Context) ([]kubeconfig.Context, error) {
@@ -280,20 +294,30 @@ func globToRegex(pattern string) string {
 	return "^" + pattern + "$"
 }
 
-func executeSequential(out io.Writer, contexts []kubeconfig.Context, args []string, namespace string, sm *state.Manager, cfg config.Config) error {
+func executeSequential(out io.Writer, contexts []kubeconfig.Context, args []string, namespace string, sm *state.Manager, cfg config.Config, outputFormat string) error {
 	hasErrors := false
+	var allResults []contextExecResult
 
 	for i, ctx := range contexts {
-		if i > 0 {
+		if outputFormat != outputJSON && i > 0 {
 			fmt.Fprintln(out)
 		}
 
-		result := executeInContext(ctx, args, namespace, sm, cfg)
-		printResult(out, result)
+		result := executeInContext(ctx, args, namespace, sm, cfg, outputFormat)
+
+		if outputFormat == outputJSON {
+			allResults = append(allResults, result)
+		} else {
+			printResult(out, result)
+		}
 
 		if result.err != nil {
 			hasErrors = true
 		}
+	}
+
+	if outputFormat == outputJSON {
+		printJSONResults(out, allResults)
 	}
 
 	if hasErrors {
@@ -303,7 +327,7 @@ func executeSequential(out io.Writer, contexts []kubeconfig.Context, args []stri
 	return nil
 }
 
-func executeParallel(out io.Writer, contexts []kubeconfig.Context, args []string, namespace string, sm *state.Manager, cfg config.Config) error {
+func executeParallel(out io.Writer, contexts []kubeconfig.Context, args []string, namespace string, sm *state.Manager, cfg config.Config, outputFormat string) error {
 	var wg sync.WaitGroup
 
 	resultsChan := make(chan contextExecResult, len(contexts))
@@ -312,7 +336,7 @@ func executeParallel(out io.Writer, contexts []kubeconfig.Context, args []string
 		wg.Add(1)
 		go func(ctx kubeconfig.Context) {
 			defer wg.Done()
-			result := executeInContext(ctx, args, namespace, sm, cfg)
+			result := executeInContext(ctx, args, namespace, sm, cfg, outputFormat)
 			resultsChan <- result
 		}(ctx)
 	}
@@ -331,13 +355,20 @@ func executeParallel(out io.Writer, contexts []kubeconfig.Context, args []string
 
 	hasErrors := false
 	for i, result := range results {
-		if i > 0 {
-			fmt.Fprintln(out)
+		if outputFormat != outputJSON {
+			if i > 0 {
+				fmt.Fprintln(out)
+			}
+			printResult(out, result)
 		}
-		printResult(out, result)
+
 		if result.err != nil {
 			hasErrors = true
 		}
+	}
+
+	if outputFormat == outputJSON {
+		printJSONResults(out, results)
 	}
 
 	if hasErrors {
@@ -347,7 +378,7 @@ func executeParallel(out io.Writer, contexts []kubeconfig.Context, args []string
 	return nil
 }
 
-func executeInContext(ctx kubeconfig.Context, args []string, namespace string, sm *state.Manager, cfg config.Config) contextExecResult {
+func executeInContext(ctx kubeconfig.Context, args []string, namespace string, sm *state.Manager, cfg config.Config, outputFormat string) contextExecResult {
 	result := contextExecResult{
 		contextName: ctx.Name,
 	}
@@ -359,8 +390,12 @@ func executeInContext(ctx kubeconfig.Context, args []string, namespace string, s
 	}
 
 	if locked {
-		yellow := color.New(color.FgHiYellow).SprintFunc()
-		result.err = fmt.Errorf("%s: context %s is protected, skipping", yellow("WARNING"), ctx.Name)
+		warningText := "WARNING"
+		if outputFormat != outputJSON {
+			yellow := color.New(color.FgHiYellow).SprintFunc()
+			warningText = yellow(warningText)
+		}
+		result.err = fmt.Errorf("%s: context %s is protected, skipping", warningText, ctx.Name)
 		return result
 	}
 
@@ -407,6 +442,45 @@ func printResult(out io.Writer, result contextExecResult) {
 	} else {
 		fmt.Fprint(out, result.output)
 	}
+}
+
+func printJSONResults(out io.Writer, results []contextExecResult) {
+	outputList := make([]map[string]any, 0, len(results))
+
+	for _, res := range results {
+		var jsonObj any
+		outputStr := strings.TrimSpace(res.output)
+
+		if outputStr != "" {
+			err := json.Unmarshal([]byte(outputStr), &jsonObj)
+			if err != nil {
+				jsonObj = outputStr
+			}
+		} else {
+			jsonObj = ""
+		}
+
+		resMap := make(map[string]any)
+		resMap["context"] = res.contextName
+
+		if res.err != nil {
+			resMap["error"] = res.err.Error()
+		}
+		resMap["output"] = jsonObj
+
+		outputList = append(outputList, resMap)
+	}
+
+	jsonBytes, err := json.MarshalIndent(outputList, "", "  ")
+	if err != nil {
+		fallbackError := []map[string]string{
+			{"error": fmt.Sprintf("failed to marshal json: %v", err)},
+		}
+		fallbackBytes, _ := json.MarshalIndent(fallbackError, "", "  ")
+		fmt.Fprintln(out, string(fallbackBytes))
+		return
+	}
+	fmt.Fprintln(out, string(jsonBytes))
 }
 
 func showDryRun(out io.Writer, contexts []kubeconfig.Context, args []string, namespace string, sm *state.Manager, cfg config.Config) error {
