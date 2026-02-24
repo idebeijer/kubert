@@ -303,9 +303,9 @@ func executeSequential(out io.Writer, contexts []kubeconfig.Context, args []stri
 			fmt.Fprintln(out)
 		}
 
-		result := executeInContext(ctx, args, namespace, sm, cfg)
+		result := executeInContext(ctx, args, namespace, sm, cfg, outputFormat)
 
-		if outputFormat == "json" {
+		if outputFormat == outputJSON {
 			allResults = append(allResults, result)
 		} else {
 			printResult(out, result)
@@ -336,7 +336,7 @@ func executeParallel(out io.Writer, contexts []kubeconfig.Context, args []string
 		wg.Add(1)
 		go func(ctx kubeconfig.Context) {
 			defer wg.Done()
-			result := executeInContext(ctx, args, namespace, sm, cfg)
+			result := executeInContext(ctx, args, namespace, sm, cfg, outputFormat)
 			resultsChan <- result
 		}(ctx)
 	}
@@ -355,7 +355,7 @@ func executeParallel(out io.Writer, contexts []kubeconfig.Context, args []string
 
 	hasErrors := false
 	for i, result := range results {
-		if outputFormat != "json" {
+		if outputFormat != outputJSON {
 			if i > 0 {
 				fmt.Fprintln(out)
 			}
@@ -378,7 +378,7 @@ func executeParallel(out io.Writer, contexts []kubeconfig.Context, args []string
 	return nil
 }
 
-func executeInContext(ctx kubeconfig.Context, args []string, namespace string, sm *state.Manager, cfg config.Config) contextExecResult {
+func executeInContext(ctx kubeconfig.Context, args []string, namespace string, sm *state.Manager, cfg config.Config, outputFormat string) contextExecResult {
 	result := contextExecResult{
 		contextName: ctx.Name,
 	}
@@ -390,8 +390,12 @@ func executeInContext(ctx kubeconfig.Context, args []string, namespace string, s
 	}
 
 	if locked {
-		yellow := color.New(color.FgHiYellow).SprintFunc()
-		result.err = fmt.Errorf("%s: context %s is protected, skipping", yellow("WARNING"), ctx.Name)
+		warningText := "WARNING"
+		if outputFormat != outputJSON {
+			yellow := color.New(color.FgHiYellow).SprintFunc()
+			warningText = yellow(warningText)
+		}
+		result.err = fmt.Errorf("%s: context %s is protected, skipping", warningText, ctx.Name)
 		return result
 	}
 
@@ -452,6 +456,8 @@ func printJSONResults(out io.Writer, results []contextExecResult) {
 			if err != nil {
 				jsonObj = outputStr
 			}
+		} else {
+			jsonObj = ""
 		}
 
 		resMap := make(map[string]any)
@@ -460,19 +466,21 @@ func printJSONResults(out io.Writer, results []contextExecResult) {
 		if res.err != nil {
 			resMap["error"] = res.err.Error()
 		}
-		if jsonObj != nil {
-			resMap["output"] = jsonObj
-		}
+		resMap["output"] = jsonObj
 
 		outputList = append(outputList, resMap)
 	}
 
-	bytes, err := json.MarshalIndent(outputList, "", "  ")
+	jsonBytes, err := json.MarshalIndent(outputList, "", "  ")
 	if err != nil {
-		fmt.Fprintf(out, "{\"error\": \"failed to marshal json: %v\"}\n", err)
+		fallbackError := []map[string]string{
+			{"error": fmt.Sprintf("failed to marshal json: %v", err)},
+		}
+		fallbackBytes, _ := json.MarshalIndent(fallbackError, "", "  ")
+		fmt.Fprintln(out, string(fallbackBytes))
 		return
 	}
-	fmt.Fprintln(out, string(bytes))
+	fmt.Fprintln(out, string(jsonBytes))
 }
 
 func showDryRun(out io.Writer, contexts []kubeconfig.Context, args []string, namespace string, sm *state.Manager, cfg config.Config) error {

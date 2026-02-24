@@ -270,7 +270,7 @@ func TestExecuteInContextKubeconfigSetup(t *testing.T) {
 
 	args := []string{"sh", "-c", "echo $KUBECONFIG"}
 
-	result := executeInContext(contexts[0], args, "", sm, testConfig)
+	result := executeInContext(contexts[0], args, "", sm, testConfig, "")
 
 	if result.err != nil {
 		t.Fatalf("executeInContext failed: %v", result.err)
@@ -316,7 +316,7 @@ func TestExecuteInContextWithNamespace(t *testing.T) {
 
 	args := []string{"sh", "-c", "cat $KUBECONFIG | grep namespace"}
 
-	result := executeInContext(contexts[0], args, namespace, sm, testConfig)
+	result := executeInContext(contexts[0], args, namespace, sm, testConfig, "")
 
 	if result.err != nil {
 		t.Fatalf("executeInContext failed: %v", result.err)
@@ -364,7 +364,7 @@ func TestExecuteParallelIsolation(t *testing.T) {
 			defer wg.Done()
 
 			args := []string{"sh", "-c", "echo $KUBECONFIG"}
-			result := executeInContext(ctx, args, "", sm, testConfig)
+			result := executeInContext(ctx, args, "", sm, testConfig, "")
 
 			mu.Lock()
 			kubeconfigPath := strings.TrimSpace(result.output)
@@ -574,6 +574,7 @@ func TestExecOptions_Validate(t *testing.T) {
 		name          string
 		patterns      []string
 		commandArgs   []string
+		output        string
 		isInteractive bool
 		expectError   bool
 		errorContains string
@@ -582,6 +583,14 @@ func TestExecOptions_Validate(t *testing.T) {
 			name:          "valid: patterns and command",
 			patterns:      []string{"prod*"},
 			commandArgs:   []string{"kubectl", "get", "pods"},
+			isInteractive: false,
+			expectError:   false,
+		},
+		{
+			name:          "valid: json output format",
+			patterns:      []string{"prod*"},
+			commandArgs:   []string{"kubectl", "get", "pods"},
+			output:        outputJSON,
 			isInteractive: false,
 			expectError:   false,
 		},
@@ -612,6 +621,7 @@ func TestExecOptions_Validate(t *testing.T) {
 			name:          "invalid: output format not supported",
 			patterns:      []string{"prod*"},
 			commandArgs:   []string{"kubectl", "get", "pods"},
+			output:        "yaml",
 			isInteractive: false,
 			expectError:   true,
 			errorContains: "invalid output format: yaml. Only 'json' is supported",
@@ -623,13 +633,10 @@ func TestExecOptions_Validate(t *testing.T) {
 			o := &ExecOptions{
 				Patterns:    tt.patterns,
 				CommandArgs: tt.commandArgs,
-				Output:      "yaml",
+				Output:      tt.output,
 				IsInteractive: func() bool {
 					return tt.isInteractive
 				},
-			}
-			if tt.name != "invalid: output format not supported" {
-				o.Output = "" // Reset for other tests
 			}
 
 			err := o.Validate()
@@ -691,6 +698,51 @@ func TestExecOptions_Run_DryRun(t *testing.T) {
 	}
 	if !strings.Contains(output, "test-cluster-2") {
 		t.Error("Expected test-cluster-2 in output")
+	}
+}
+
+func TestExecOptions_Run_JSONOutput(t *testing.T) {
+	var buf bytes.Buffer
+
+	o := &ExecOptions{
+		Out:         &buf,
+		ErrOut:      &buf,
+		Patterns:    []string{"test*"},
+		Namespace:   "default",
+		Output:      outputJSON,
+		CommandArgs: []string{"kubectl", "get", "pods"},
+		ContextLoader: func() ([]kubeconfig.Context, error) {
+			return []kubeconfig.Context{
+				{Name: "test-cluster-1", WithPath: kubeconfig.WithPath{FilePath: "/tmp/config"}},
+			}, nil
+		},
+		StateManager: func() (*state.Manager, error) {
+			return &state.Manager{}, nil
+		},
+		Config: config.Config{
+			Protection: config.Protection{
+				Prompt: false,
+			},
+		},
+	}
+
+	// Will cause execution fail due to dummy binary/arguments but we can check output structure
+	err := o.Run()
+	if err == nil {
+		t.Error("Expected execution error since dummy binary was invoked, got nil")
+	}
+
+	output := buf.String()
+
+	if strings.Contains(output, "Executing command against") {
+		t.Error("Expected progress headers (Executing command against...) to be suppressed")
+	}
+
+	if !strings.Contains(output, "\"context\": \"test-cluster-1\"") {
+		t.Error("Expected test-cluster-1 to be recorded in structural JSON context block")
+	}
+	if !strings.Contains(output, "\"error\":") {
+		t.Error("Expected error block captured inside parsed JSON output")
 	}
 }
 
@@ -780,6 +832,10 @@ func TestPrintJSONResults(t *testing.T) {
 			err:         errors.New("connection refused"),
 			output:      "raw text output",
 		},
+		{
+			contextName: "cluster-empty",
+			output:      "",
+		},
 	}
 
 	printJSONResults(&buf, results)
@@ -799,5 +855,9 @@ func TestPrintJSONResults(t *testing.T) {
 
 	if !strings.Contains(outputJSON, "\"output\": \"raw text output\"") {
 		t.Errorf("Expected raw string fallback in json output, got %s", outputJSON)
+	}
+
+	if !strings.Contains(outputJSON, "\"output\": \"\"") {
+		t.Errorf("Expected empty string fallback for empty output string, got %s", outputJSON)
 	}
 }
