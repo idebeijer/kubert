@@ -3,6 +3,7 @@ package kubert
 import (
 	"fmt"
 	"os"
+	"path/filepath"
 )
 
 const (
@@ -29,7 +30,9 @@ func ShellPreFlightCheck() error {
 	}
 
 	kubeconfigPath := os.Getenv("KUBECONFIG")
-	if _, err := os.Stat(kubeconfigPath); os.IsNotExist(err) {
+	// #nosec G703 (CWE-703) -- the kubeconfigPath is read from the KUBECONFIG environment variabele.
+	// Also, it's used just for a fail fast check before starting the shell.
+	if _, err := os.Stat(filepath.Clean(kubeconfigPath)); os.IsNotExist(err) {
 		return fmt.Errorf("kubeconfig file not found at %s", kubeconfigPath)
 	}
 

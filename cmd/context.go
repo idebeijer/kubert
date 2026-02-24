@@ -224,7 +224,7 @@ func createTempKubeconfigFile(kubeconfigPath, selectedContextName, namespace str
 	if err != nil {
 		return nil, nil, err
 	}
-	err = os.Chmod(tempKubeconfig.Name(), 0o600)
+	err = tempKubeconfig.Chmod(0o600)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -235,6 +235,7 @@ func createTempKubeconfigFile(kubeconfigPath, selectedContextName, namespace str
 
 	cleanup := func() {
 		_ = tempKubeconfig.Close()
+		// #nosec G703 -- temporal file created by the program is safe
 		_ = os.Remove(tempKubeconfig.Name())
 	}
 

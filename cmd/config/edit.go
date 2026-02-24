@@ -66,7 +66,13 @@ The editor is chosen from the $EDITOR or $VISUAL environment variable, falling b
 				editor = "vim"
 			}
 
-			editorCmd := exec.Command(editor, configFile)
+			safeEditor, err := exec.LookPath(editor)
+			if err != nil {
+				return fmt.Errorf("failed to find editor (%s): %w", editor, err)
+			}
+
+			// #nosec G702 -- editor is checked for existence with exec.LookPath
+			editorCmd := exec.Command(safeEditor, configFile)
 			editorCmd.Stdin = os.Stdin
 			editorCmd.Stdout = os.Stdout
 			editorCmd.Stderr = os.Stderr

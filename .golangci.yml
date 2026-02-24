@@ -10,6 +10,7 @@ linters:
     - ginkgolinter
     - goconst
     - gocyclo
+    - gosec
     - govet
     - ineffassign
     - modernize
@@ -37,7 +38,13 @@ linters:
         - fmt.Fprintf
         - fmt.Fprintln
         - fmt.Print
+    gosec:
+      severity: high
   exclusions:
+    rules:
+      - path: _test\.go
+        linters:
+          - gosec
     generated: lax
     paths:
       - third_party$
