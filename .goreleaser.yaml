@@ -36,6 +36,9 @@ nfpms:
       - deb
       - rpm
       - apk
+    suggests:
+      - kubectl
+      - fzf
     contents:
       - src: "completions/kubert.bash"
         dst: "/usr/share/bash-completion/completions/kubert"
