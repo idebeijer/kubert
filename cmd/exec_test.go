@@ -608,6 +608,14 @@ func TestExecOptions_Validate(t *testing.T) {
 			expectError:   true,
 			errorContains: "patterns are required in non-interactive mode",
 		},
+		{
+			name:          "invalid: output format not supported",
+			patterns:      []string{"prod*"},
+			commandArgs:   []string{"kubectl", "get", "pods"},
+			isInteractive: false,
+			expectError:   true,
+			errorContains: "invalid output format: yaml. Only 'json' is supported",
+		},
 	}
 
 	for _, tt := range tests {
@@ -615,9 +623,13 @@ func TestExecOptions_Validate(t *testing.T) {
 			o := &ExecOptions{
 				Patterns:    tt.patterns,
 				CommandArgs: tt.commandArgs,
+				Output:      "yaml",
 				IsInteractive: func() bool {
 					return tt.isInteractive
 				},
+			}
+			if tt.name != "invalid: output format not supported" {
+				o.Output = "" // Reset for other tests
 			}
 
 			err := o.Validate()
@@ -752,5 +764,40 @@ func TestExecOptions_Run_InteractiveNoSelection(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "no contexts selected") {
 		t.Errorf("Unexpected error message: %v", err)
+	}
+}
+
+func TestPrintJSONResults(t *testing.T) {
+	var buf bytes.Buffer
+
+	results := []contextExecResult{
+		{
+			contextName: "cluster-success",
+			output:      "{\"apiVersion\": \"v1\", \"kind\": \"Pod\"}",
+		},
+		{
+			contextName: "cluster-error",
+			err:         errors.New("connection refused"),
+			output:      "raw text output",
+		},
+	}
+
+	printJSONResults(&buf, results)
+	outputJSON := buf.String()
+
+	if !strings.Contains(outputJSON, "\"context\": \"cluster-success\"") {
+		t.Errorf("Expected cluster-success in json output, got %s", outputJSON)
+	}
+
+	if !strings.Contains(outputJSON, "\"apiVersion\": \"v1\"") {
+		t.Errorf("Expected unmarshaled JSON field in output, got %s", outputJSON)
+	}
+
+	if !strings.Contains(outputJSON, "\"error\": \"connection refused\"") {
+		t.Errorf("Expected error string in json output, got %s", outputJSON)
+	}
+
+	if !strings.Contains(outputJSON, "\"output\": \"raw text output\"") {
+		t.Errorf("Expected raw string fallback in json output, got %s", outputJSON)
 	}
 }

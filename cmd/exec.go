@@ -85,6 +85,9 @@ you can select multiple contexts interactively (use Tab/Shift-Tab to select).`,
   # Specify namespace for all contexts
   kubert exec "prod*" --namespace kube-system -- kubectl get pods
   
+  # Aggregate structured output across contexts into JSON array
+  kubert exec "prod*" -o json -- kubectl get nodes -o json | jq '.[].output.items[]?'
+
   # Interactive multi-select (if fzf is available)
   kubert exec -- kubectl get nodes
   
