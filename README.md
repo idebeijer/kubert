@@ -16,6 +16,8 @@
 
 `kubert` lets you hop between Kubernetes contexts and namespaces inside dedicated subshells. Each shell gets its own kubeconfig copy so you can keep production, staging, and local sessions open side-by-side without collisions. On top of that, kubert offers optional guard rails (context protection), multi-context execution, and shell hooks to give you a contextual workflow similar to `kubectx`, `kubens`, and [kubie](https://github.com/sbstp/kubie) in one tool.
 
+**Jump to:** [Installation](#installation) | [Quick Start](#quick-start) | [Configuration](#configuration)
+
 ## Features
 
 - **Context isolation**: spawn shells with temporary kubeconfig files so contexts never bleed into other terminals.
@@ -39,10 +41,23 @@ Installs the latest binary from GitHub Releases.
 
 ```sh
 curl -fsSL https://raw.githubusercontent.com/idebeijer/kubert/main/scripts/install.sh | bash
+```
 
-# Install to a custom directory (e.g., ~/.local/bin)
+Install to a custom directory (e.g., `~/.local/bin`):
+
+```sh
 curl -fsSL https://raw.githubusercontent.com/idebeijer/kubert/main/scripts/install.sh | bash -s -- ~/.local/bin
 ```
+
+### Arch Linux (AUR)
+
+```sh
+yay -S kubert-bin
+```
+
+### Linux Packages (.deb, .rpm, .apk)
+
+Pre-built packages are available on the [GitHub Releases](https://github.com/idebeijer/kubert/releases/latest) page.
 
 ### From source with Go
 
@@ -54,8 +69,6 @@ go install github.com/idebeijer/kubert@latest
 
 If you installed via Homebrew, completions are usually installed automatically. See [Homebrew's Shell Completion docs](https://docs.brew.sh/Shell-Completion).
 
-<details>
-<summary>Manual completion script installation</summary>
 For manual installation, add the following to your shell config (e.g., `~/.bashrc`, `~/.zshrc`):
 
 ```sh
@@ -69,23 +82,9 @@ source <(kubert completion zsh)
 kubert completion fish | source
 ```
 
-</details>
-
 ## Quick Start
 
-By default, `kubert` searches for kubeconfigs in:
-
-- `~/.kube/config`
-- `~/.kube/*.yml`
-- `~/.kube/*.yaml`
-
-If your config files are in these locations, you don't need any additional configuration. To scan other directories, create `~/.config/kubert/config.yaml`:
-
-```yaml
-kubeconfigs:
-  include:
-    - "~/custom/k8s/configs/*"
-```
+By default, `kubert` searches for kubeconfigs in these paths (`~/.kube/config`, `~/.kube/*.yml`, `~/.kube/*.yaml`). If your config files are in other locations or you need additional configuration, please check out the [Configuration](#configuration) section.
 
 > Tip: install [`fzf`](https://github.com/junegunn/fzf) to pick contexts and namespaces interactively. Without it, kubert prints the available options so you can copy/paste.
 
@@ -124,16 +123,6 @@ kubert kubeconfig lint  # check kubeconfig files for errors and issues
 ```
 
 ## Command Reference
-
-| Command                                 | Purpose                                             | Highlights                                                                        |
-| --------------------------------------- | --------------------------------------------------- | --------------------------------------------------------------------------------- |
-| `kubert ctx [<context>\|-]`             | Launch a shell pinned to a context                  | Supports interactive selection, remembers the previous context with `-`           |
-| `kubert ns [<namespace>]`               | Switch namespace inside the current kubert shell    | Lists namespaces when `fzf` is unavailable                                        |
-| `kubert exec [pattern...] -- <command>` | Execute one command across multiple contexts        | Supports glob (`*`, `?`), `--regex`, `--parallel`, `--namespace`, and `--dry-run` |
-| `kubert kubectl <args...>`              | Run `kubectl` with protection checks                | Blocks/asks confirmation for commands marked as protected                         |
-| `kubert protection <subcommand>`        | Manage context protection                           | `protect`, `unprotect`, `lift`, `remove`, and `info`                              |
-| `kubert which <ctx\|ns\|config>`        | Print the active context, namespace, or config path | Handy for scripts/prompts                                                         |
-| `kubert kubeconfig list`                | List kubeconfig files kubert will scan              | Respects include/exclude settings                                                 |
 
 For more information on all commands, see the [docs](docs/README.md).
 
