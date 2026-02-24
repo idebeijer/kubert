@@ -20,6 +20,28 @@ import (
 	"github.com/idebeijer/kubert/internal/state"
 )
 
+var execExample = `  # Run kubectl get pods in all production contexts
+  kubert exec "prod*" -- kubectl get pods
+
+  # Match multiple patterns
+  kubert exec "prod*" "staging*" -- kubectl get nodes
+
+  # Use regex to match specific patterns
+  kubert exec --regex "^(test|staging).*" -- kubectl get nodes
+
+  # Run in parallel across contexts
+  kubert exec "staging*" --parallel -- kubectl get deployments
+  
+  # Aggregate structured output across contexts into JSON array
+  kubert exec "prod*" -o json -- kubectl get nodes -o json | jq '.[].output.items[]?'
+
+  # Interactive multi-select (if fzf is available)
+  kubert exec -- kubectl get nodes
+  
+  # Dry run to see which contexts would be used
+  kubert exec "prod*" --dry-run -- kubectl get pods
+`
+
 type ExecOptions struct {
 	Out    io.Writer
 	ErrOut io.Writer
@@ -70,29 +92,7 @@ By default, uses glob-style wildcards (* and ?). Use --regex for regex patterns.
 
 If no patterns are provided and running in an interactive shell with fzf,
 you can select multiple contexts interactively (use Tab/Shift-Tab to select).`,
-		Example: `  # Run kubectl get pods in all production contexts
-  kubert exec "prod*" -- kubectl get pods
-
-  # Match multiple patterns
-  kubert exec "prod*" "staging*" -- kubectl get nodes
-
-  # Use regex to match specific patterns
-  kubert exec --regex "^(test|staging).*" -- kubectl get nodes
-
-  # Run in parallel across contexts
-  kubert exec "staging*" --parallel -- kubectl get deployments
-
-  # Specify namespace for all contexts
-  kubert exec "prod*" --namespace kube-system -- kubectl get pods
-  
-  # Aggregate structured output across contexts into JSON array
-  kubert exec "prod*" -o json -- kubectl get nodes -o json | jq '.[].output.items[]?'
-
-  # Interactive multi-select (if fzf is available)
-  kubert exec -- kubectl get nodes
-  
-  # Dry run to see which contexts will be used
-  kubert exec "prod*" --dry-run -- kubectl get pods`,
+		Example:      execExample,
 		SilenceUsage: true,
 		Args:         cobra.MinimumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
