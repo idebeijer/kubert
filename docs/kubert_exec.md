@@ -18,7 +18,7 @@ kubert exec [pattern...] -- command [args...] [flags]
 
 ### Examples
 
-```
+```sh
   # Run kubectl get pods in all production contexts
   kubert exec "prod*" -- kubectl get pods
 

@@ -12,7 +12,7 @@ kubert ns [flags]
 
 ### Examples
 
-```
+```sh
   # Select a namespace interactively
   kubert ns
 

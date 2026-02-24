@@ -17,7 +17,7 @@ kubert protection lift <duration> [flags]
 
 ### Examples
 
-```
+```sh
   # Lift protection for 5 minutes
   kubert protection lift 5m
 ```
