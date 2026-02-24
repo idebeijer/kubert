@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"encoding/json"
 	"fmt"
 	"io"
 	"os"
@@ -27,6 +28,7 @@ type ExecOptions struct {
 	Regex     bool
 	Parallel  bool
 	DryRun    bool
+	Output    string
 
 	Patterns    []string
 	CommandArgs []string
@@ -105,6 +107,7 @@ you can select multiple contexts interactively (use Tab/Shift-Tab to select).`,
 	cmd.Flags().BoolVar(&o.Regex, "regex", false, "Use regex pattern matching instead of glob-style wildcards")
 	cmd.Flags().BoolVarP(&o.Parallel, "parallel", "p", false, "Execute commands in parallel across all contexts")
 	cmd.Flags().BoolVar(&o.DryRun, "dry-run", false, "Show which contexts would be used without executing the command")
+	cmd.Flags().StringVarP(&o.Output, "output", "o", "", "Output format (e.g., 'json')")
 
 	return cmd
 }
@@ -138,6 +141,10 @@ func (o *ExecOptions) Validate() error {
 		return fmt.Errorf("patterns are required in non-interactive mode")
 	}
 
+	if o.Output != "" && o.Output != "json" {
+		return fmt.Errorf("invalid output format: %s. Only 'json' is supported", o.Output)
+	}
+
 	return nil
 }
 
@@ -161,16 +168,18 @@ func (o *ExecOptions) Run() error {
 		return showDryRun(o.Out, matchedContexts, o.CommandArgs, o.Namespace, sm, o.Config)
 	}
 
-	fmt.Fprintf(o.Out, "Executing command against %d context(s):\n", len(matchedContexts))
-	for _, ctx := range matchedContexts {
-		fmt.Fprintf(o.Out, "  - %s\n", ctx.Name)
+	if o.Output != "json" {
+		fmt.Fprintf(o.Out, "Executing command against %d context(s):\n", len(matchedContexts))
+		for _, ctx := range matchedContexts {
+			fmt.Fprintf(o.Out, "  - %s\n", ctx.Name)
+		}
+		fmt.Fprintln(o.Out)
 	}
-	fmt.Fprintln(o.Out)
 
 	if o.Parallel {
-		return executeParallel(o.Out, matchedContexts, o.CommandArgs, o.Namespace, sm, o.Config)
+		return executeParallel(o.Out, matchedContexts, o.CommandArgs, o.Namespace, sm, o.Config, o.Output)
 	}
-	return executeSequential(o.Out, matchedContexts, o.CommandArgs, o.Namespace, sm, o.Config)
+	return executeSequential(o.Out, matchedContexts, o.CommandArgs, o.Namespace, sm, o.Config, o.Output)
 }
 
 func (o *ExecOptions) resolveContexts(contexts []kubeconfig.Context) ([]kubeconfig.Context, error) {
@@ -280,20 +289,30 @@ func globToRegex(pattern string) string {
 	return "^" + pattern + "$"
 }
 
-func executeSequential(out io.Writer, contexts []kubeconfig.Context, args []string, namespace string, sm *state.Manager, cfg config.Config) error {
+func executeSequential(out io.Writer, contexts []kubeconfig.Context, args []string, namespace string, sm *state.Manager, cfg config.Config, outputFormat string) error {
 	hasErrors := false
+	var allResults []contextExecResult
 
 	for i, ctx := range contexts {
-		if i > 0 {
+		if outputFormat != "json" && i > 0 {
 			fmt.Fprintln(out)
 		}
 
 		result := executeInContext(ctx, args, namespace, sm, cfg)
-		printResult(out, result)
+
+		if outputFormat == "json" {
+			allResults = append(allResults, result)
+		} else {
+			printResult(out, result)
+		}
 
 		if result.err != nil {
 			hasErrors = true
 		}
+	}
+
+	if outputFormat == "json" {
+		printJSONResults(out, allResults)
 	}
 
 	if hasErrors {
@@ -303,7 +322,7 @@ func executeSequential(out io.Writer, contexts []kubeconfig.Context, args []stri
 	return nil
 }
 
-func executeParallel(out io.Writer, contexts []kubeconfig.Context, args []string, namespace string, sm *state.Manager, cfg config.Config) error {
+func executeParallel(out io.Writer, contexts []kubeconfig.Context, args []string, namespace string, sm *state.Manager, cfg config.Config, outputFormat string) error {
 	var wg sync.WaitGroup
 
 	resultsChan := make(chan contextExecResult, len(contexts))
@@ -331,13 +350,20 @@ func executeParallel(out io.Writer, contexts []kubeconfig.Context, args []string
 
 	hasErrors := false
 	for i, result := range results {
-		if i > 0 {
-			fmt.Fprintln(out)
+		if outputFormat != "json" {
+			if i > 0 {
+				fmt.Fprintln(out)
+			}
+			printResult(out, result)
 		}
-		printResult(out, result)
+
 		if result.err != nil {
 			hasErrors = true
 		}
+	}
+
+	if outputFormat == "json" {
+		printJSONResults(out, results)
 	}
 
 	if hasErrors {
@@ -407,6 +433,41 @@ func printResult(out io.Writer, result contextExecResult) {
 	} else {
 		fmt.Fprint(out, result.output)
 	}
+}
+
+func printJSONResults(out io.Writer, results []contextExecResult) {
+	var outputList []map[string]interface{}
+
+	for _, res := range results {
+		var jsonObj interface{}
+		outputStr := strings.TrimSpace(res.output)
+
+		if outputStr != "" {
+			err := json.Unmarshal([]byte(outputStr), &jsonObj)
+			if err != nil {
+				jsonObj = outputStr
+			}
+		}
+
+		resMap := make(map[string]interface{})
+		resMap["context"] = res.contextName
+
+		if res.err != nil {
+			resMap["error"] = res.err.Error()
+		}
+		if jsonObj != nil {
+			resMap["output"] = jsonObj
+		}
+
+		outputList = append(outputList, resMap)
+	}
+
+	bytes, err := json.MarshalIndent(outputList, "", "  ")
+	if err != nil {
+		fmt.Fprintf(out, "{\"error\": \"failed to marshal json: %v\"}\n", err)
+		return
+	}
+	fmt.Fprintln(out, string(bytes))
 }
 
 func showDryRun(out io.Writer, contexts []kubeconfig.Context, args []string, namespace string, sm *state.Manager, cfg config.Config) error {
