@@ -20,6 +20,8 @@ import (
 	"github.com/idebeijer/kubert/internal/state"
 )
 
+const outputJSON = "json"
+
 var execExample = `  # Run kubectl get pods in all production contexts
   kubert exec "prod*" -- kubectl get pods
 
@@ -144,8 +146,8 @@ func (o *ExecOptions) Validate() error {
 		return fmt.Errorf("patterns are required in non-interactive mode")
 	}
 
-	if o.Output != "" && o.Output != "json" {
-		return fmt.Errorf("invalid output format: %s. Only 'json' is supported", o.Output)
+	if o.Output != "" && o.Output != outputJSON {
+		return fmt.Errorf("invalid output format: %s. Only '%s' is supported", o.Output, outputJSON)
 	}
 
 	return nil
@@ -171,7 +173,7 @@ func (o *ExecOptions) Run() error {
 		return showDryRun(o.Out, matchedContexts, o.CommandArgs, o.Namespace, sm, o.Config)
 	}
 
-	if o.Output != "json" {
+	if o.Output != outputJSON {
 		fmt.Fprintf(o.Out, "Executing command against %d context(s):\n", len(matchedContexts))
 		for _, ctx := range matchedContexts {
 			fmt.Fprintf(o.Out, "  - %s\n", ctx.Name)
@@ -297,7 +299,7 @@ func executeSequential(out io.Writer, contexts []kubeconfig.Context, args []stri
 	var allResults []contextExecResult
 
 	for i, ctx := range contexts {
-		if outputFormat != "json" && i > 0 {
+		if outputFormat != outputJSON && i > 0 {
 			fmt.Fprintln(out)
 		}
 
@@ -314,7 +316,7 @@ func executeSequential(out io.Writer, contexts []kubeconfig.Context, args []stri
 		}
 	}
 
-	if outputFormat == "json" {
+	if outputFormat == outputJSON {
 		printJSONResults(out, allResults)
 	}
 
@@ -365,7 +367,7 @@ func executeParallel(out io.Writer, contexts []kubeconfig.Context, args []string
 		}
 	}
 
-	if outputFormat == "json" {
+	if outputFormat == outputJSON {
 		printJSONResults(out, results)
 	}
 
@@ -439,10 +441,10 @@ func printResult(out io.Writer, result contextExecResult) {
 }
 
 func printJSONResults(out io.Writer, results []contextExecResult) {
-	var outputList []map[string]interface{}
+	outputList := make([]map[string]any, 0, len(results))
 
 	for _, res := range results {
-		var jsonObj interface{}
+		var jsonObj any
 		outputStr := strings.TrimSpace(res.output)
 
 		if outputStr != "" {
@@ -452,7 +454,7 @@ func printJSONResults(out io.Writer, results []contextExecResult) {
 			}
 		}
 
-		resMap := make(map[string]interface{})
+		resMap := make(map[string]any)
 		resMap["context"] = res.contextName
 
 		if res.err != nil {
