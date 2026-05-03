@@ -183,7 +183,11 @@ func writeEnvUpdateFile(contextName, originalKubeconfigPath string) error {
 		_ = os.Remove(tmpName)
 		return fmt.Errorf("failed to close env update file: %w", err)
 	}
-	return os.Rename(tmpName, path)
+	if err := os.Rename(tmpName, path); err != nil {
+		_ = os.Remove(tmpName)
+		return fmt.Errorf("failed to install env update file: %w", err)
+	}
+	return nil
 }
 
 // shellSingleQuote wraps s in single quotes, safe for bash and zsh.
