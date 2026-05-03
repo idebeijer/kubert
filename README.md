@@ -124,7 +124,7 @@ kubert kubeconfig lint  # check kubeconfig files for errors and issues
 
 ## Command Reference
 
-For more information on all commands, see the [docs](docs/README.md).
+For more information on all commands, see the [docs](docs/commands/README.md).
 
 ## Configuration
 
@@ -146,6 +146,11 @@ kubeconfigs:
 # Use `fzf` for interactive context/namespace selection when available.
 # If `fzf` is not found, kubert falls back to a non-interactive list.
 interactive: true
+
+# Context switch mode when already inside a kubert shell:
+# - false (default): switch context in-place, stay in the same shell
+# - true: spawn a new nested shell with the new context (recursive mode)
+recursive: false
 
 # Protect contexts against accidental destructive commands. See "Context Protection" below for details. (not configured by default)
 protection:

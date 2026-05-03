@@ -29,7 +29,8 @@ kubert ctx [context-name | -] [flags]
 ### Options
 
 ```
-  -h, --help   help for ctx
+  -h, --help        help for ctx
+      --recursive   spawn a new shell even when already inside a kubert shell
 ```
 
 ### Options inherited from parent commands

@@ -18,6 +18,7 @@ type Config struct {
 	// Deprecated: use Interactive instead.
 	InteractiveShellMode bool       `mapstructure:"interactiveShellMode" yaml:"interactiveShellMode,omitempty"`
 	Interactive          bool       `mapstructure:"interactive" yaml:"interactive"`
+	Recursive            bool       `mapstructure:"recursive" yaml:"recursive"`
 	Protection           Protection `mapstructure:"protection" yaml:"protection"`
 	Hooks                Hooks      `mapstructure:"hooks" yaml:"hooks"`
 	Fzf                  Fzf        `mapstructure:"fzf" yaml:"fzf"`
@@ -69,6 +70,7 @@ func setDefaults() {
 	})
 	viper.SetDefault("kubeconfigs.exclude", []string{})
 	viper.SetDefault("interactive", true)
+	viper.SetDefault("recursive", false)
 	viper.SetDefault("protection.regex", nil)
 	viper.SetDefault("protection.commands", []string{
 		"delete",

@@ -100,6 +100,7 @@ func (o *ContextOptions) Complete(cmd *cobra.Command, args []string) error {
 	o.ErrOut = cmd.ErrOrStderr()
 	o.Args = args
 	o.Config = config.Cfg
+	o.Recursive = o.Recursive || o.Config.Recursive
 	return nil
 }
 
