@@ -75,7 +75,7 @@ func NewShellInitCommand() *cobra.Command {
 		Short: "Print shell integration script for the given shell",
 		Long: `Print a shell function that wraps the kubert binary.
 
-Source it once in your shell rc file so that env vars like KUBERT_SHELL_CONTEXT
+Optionally source it once in your shell rc file so that env vars like KUBERT_SHELL_CONTEXT
 are kept accurate after in-place context switches.
 
   bash/zsh:  eval "$(kubert shell-init bash)"
@@ -143,7 +143,7 @@ func writeEnvUpdateFile(contextName, originalKubeconfigPath string) error {
 		fmt.Fprintf(&sb, "export %s=%s\n", kubert.ShellOriginalKubeconfigEnvVar, shellSingleQuote(originalKubeconfigPath))
 	}
 
-	return os.WriteFile(path, []byte(sb.String()), 0600)
+	return os.WriteFile(path, []byte(sb.String()), 0o600)
 }
 
 // shellSingleQuote wraps s in single quotes, safe for bash and zsh.

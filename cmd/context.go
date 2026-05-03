@@ -25,7 +25,7 @@ type ContextOptions struct {
 	ErrOut io.Writer
 
 	Args      []string
-	Recursive bool
+	Nested bool
 
 	Config         config.Config
 	ContextLoader  func() ([]kubeconfig.Context, error)
@@ -91,7 +91,7 @@ Use '-' to switch to the previously selected context.`,
 		},
 	}
 
-	cmd.Flags().BoolVar(&o.Recursive, "recursive", false, "spawn a new shell even when already inside a kubert shell")
+	cmd.Flags().BoolVar(&o.Nested, "nested", false, "spawn a nested sub-shell instead of switching context in-place")
 
 	return cmd
 }
@@ -101,7 +101,7 @@ func (o *ContextOptions) Complete(cmd *cobra.Command, args []string) error {
 	o.ErrOut = cmd.ErrOrStderr()
 	o.Args = args
 	o.Config = config.Cfg
-	o.Recursive = o.Recursive || o.Config.Recursive
+	o.Nested = o.Nested || o.Config.Nested
 	return nil
 }
 
@@ -137,7 +137,7 @@ func (o *ContextOptions) Run() error {
 		return fmt.Errorf("context %s not found", selectedContextName)
 	}
 
-	if os.Getenv(kubert.ShellActiveEnvVar) == "1" && !o.Recursive {
+	if os.Getenv(kubert.ShellActiveEnvVar) == "1" && !o.Nested {
 		return o.switchContextInPlace(sm, selectedContextName, selectedContext)
 	}
 
@@ -182,7 +182,7 @@ func (o *ContextOptions) switchContextInPlace(sm *state.Manager, contextName str
 		fmt.Fprintln(o.ErrOut, "         This does not break isolation between shells, but kubert will now reuse the existing shell rather than nesting a new one.")
 		fmt.Fprintln(o.ErrOut)
 		fmt.Fprintln(o.ErrOut, "         You can safely ignore this if you don't rely on a new nested sub-shell being created on every context switch.")
-		fmt.Fprintln(o.ErrOut, "         Use --recursive or set 'recursive: true' in config to restore the previous behaviour.")
+		fmt.Fprintln(o.ErrOut, "         Use --nested or set 'nested: true' in config to restore the previous behaviour.")
 		fmt.Fprintln(o.ErrOut)
 		fmt.Fprintln(o.ErrOut, "         See https://github.com/idebeijer/kubert/releases/tag/v0.8.0 for details.")
 		fmt.Fprintf(o.ErrOut, "         %s\n", timesNote)
@@ -370,11 +370,11 @@ func launchShellWithKubeconfig(kubeconfigPath, originalKubeconfigPath, contextNa
 	env = append(env, "KUBECONFIG="+kubeconfigPath)
 	env = append(env, kubert.ShellActiveEnvVar+"=1")
 	env = append(env, kubert.ShellKubeconfigEnvVar+"="+kubeconfigPath)
-	env = append(env, kubert.ShellOriginalKubeconfigEnvVar+"="+originalKubeconfigPath)
-	// Only set KUBERT_SHELL_CONTEXT when the shell function is active. Without it
-	// there is no mechanism to update the var after in-place switches, so a stale
-	// value is worse than no value.
+	// Only set KUBERT_SHELL_CONTEXT and KUBERT_SHELL_ORIGINAL_KUBECONFIG when the
+	// shell function is active. Without it there is no mechanism to update these vars
+	// after in-place switches, so a stale value is worse than no value.
 	if os.Getenv(kubert.ShellInitEnvVar) == "1" {
+		env = append(env, kubert.ShellOriginalKubeconfigEnvVar+"="+originalKubeconfigPath)
 		env = append(env, kubert.ShellContextEnvVar+"="+contextName)
 	}
 

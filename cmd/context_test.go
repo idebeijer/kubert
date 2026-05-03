@@ -848,7 +848,7 @@ func TestContextOptions_Run_InPlaceSwitch(t *testing.T) {
 	}
 }
 
-func TestContextOptions_Run_InPlaceSwitch_Recursive(t *testing.T) {
+func TestContextOptions_Run_InPlaceSwitch_Nested(t *testing.T) {
 	shellLauncherCalled := false
 
 	existingKubeconfig, err := os.CreateTemp("", "kubert-existing-*.yaml")
@@ -867,7 +867,7 @@ func TestContextOptions_Run_InPlaceSwitch_Recursive(t *testing.T) {
 		Out:       &bytes.Buffer{},
 		ErrOut:    &bytes.Buffer{},
 		Args:      []string{"ctx-b"},
-		Recursive: true,
+		Nested: true,
 		Config:    config.Config{},
 		ContextLoader: func() ([]kubeconfig.Context, error) {
 			return []kubeconfig.Context{
@@ -891,7 +891,7 @@ func TestContextOptions_Run_InPlaceSwitch_Recursive(t *testing.T) {
 			return f, func() { _ = os.Remove(f.Name()) }, nil
 		},
 		InPlaceWriter: func(_, _, _, _ string) error {
-			t.Error("InPlaceWriter should not be called when --recursive is set")
+			t.Error("InPlaceWriter should not be called when --nested is set")
 			return nil
 		},
 	}
@@ -901,7 +901,7 @@ func TestContextOptions_Run_InPlaceSwitch_Recursive(t *testing.T) {
 	}
 
 	if !shellLauncherCalled {
-		t.Error("ShellLauncher should have been called when --recursive is set")
+		t.Error("ShellLauncher should have been called when --nested is set")
 	}
 }
 

@@ -10,9 +10,9 @@ shell), kubert rewrites the existing temporary kubeconfig in-place instead of
 spawning a new shell. `KUBECONFIG` keeps pointing at the same path so kubectl
 picks up the new context immediately, and `$SHLVL` never increases.
 
-## Recursive mode
+## Nested mode
 
-Pass `--recursive` (or set `recursive: true` in your config) to always spawn a
+Pass `--nested` (or set `nested: true` in your config) to always spawn a
 new sub-shell, even from inside an existing kubert shell. This replicates the
 behaviour from before v0.8.0 and is useful if you deliberately want nested,
 independently-isolated shells.
@@ -31,7 +31,7 @@ flowchart TD
     E --> F[postShell hook]
     F --> G([done])
 
-    B -- "Yes + --recursive" --> C
+    B -- "Yes + --nested" --> C
 
     B -- "Yes, default" --> H[postShell hook leaving old context]
     H --> I[Overwrite existing temp kubeconfig]
@@ -44,7 +44,7 @@ flowchart TD
 
 ## Hook firing order
 
-### First invocation / recursive mode
+### First invocation / nested mode
 
 ```mermaid
 sequenceDiagram
@@ -82,17 +82,29 @@ sequenceDiagram
 
 ## Env vars set at shell spawn
 
-| Variable                           | Value                      | Updated on in-place switch?        |
-| ---------------------------------- | -------------------------- | ---------------------------------- |
-| `KUBECONFIG`                       | path to temp kubeconfig    | yes — file is overwritten in-place |
-| `KUBERT_SHELL_ACTIVE`              | `1`                        | n/a                                |
-| `KUBERT_SHELL_KUBECONFIG`          | path to temp kubeconfig    | no — same file throughout          |
-| `KUBERT_SHELL_CONTEXT`             | context name at spawn time | no — reflects spawn context only   |
-| `KUBERT_SHELL_ORIGINAL_KUBECONFIG` | original kubeconfig path   | no                                 |
-| `KUBERT_SHELL_STATE_FILE`          | path to state file         | no                                 |
+| Variable                           | Value                      | Set without shell-init? | Updated on in-place switch?              |
+| ---------------------------------- | -------------------------- | ----------------------- | ---------------------------------------- |
+| `KUBECONFIG`                       | path to temp kubeconfig    | yes                     | yes — file is overwritten in-place       |
+| `KUBERT_SHELL_ACTIVE`              | `1`                        | yes                     | n/a                                      |
+| `KUBERT_SHELL_KUBECONFIG`          | path to temp kubeconfig    | yes                     | no — same file throughout                |
+| `KUBERT_SHELL_CONTEXT`             | context name               | no — requires shell-init | yes — via env-update file (shell-init only) |
+| `KUBERT_SHELL_ORIGINAL_KUBECONFIG` | original kubeconfig path   | no — requires shell-init | no                                       |
+| `KUBERT_SHELL_STATE_FILE`          | path to state file         | yes                     | no                                       |
 
-> `KUBERT_SHELL_CONTEXT` is not updated after an in-place switch because a
-> child process cannot modify its parent shell's environment. `KUBECONFIG`
-> works correctly because kubert owns the file it points to and rewrites it
-> directly. Shell prompt integrations should read from `KUBECONFIG` or the
-> kubert state file rather than relying on `KUBERT_SHELL_CONTEXT`.
+### Why some vars require shell-init
+
+A child process (kubert) cannot modify environment variables in its parent shell.
+`KUBECONFIG` works because kubert owns the file it points to and rewrites the
+content directly — the path stays the same.
+
+`KUBERT_SHELL_CONTEXT` and `KUBERT_SHELL_ORIGINAL_KUBECONFIG` hold string values
+that would need to change on every in-place switch, which is impossible from a
+child process without cooperation from the shell itself.
+
+**With `kubert shell-init`** the shell wraps the `kubert` binary in a function.
+After each `kubert ctx` call the function sources a small env-update file
+(`/tmp/kubert-env-<pid>`) that kubert wrote, making `KUBERT_SHELL_CONTEXT` stay
+accurate across every in-place switch. Without shell-init these two vars are
+never set to avoid stale values being worse than no value at all.
+
+See [Shell Init](../README.md#shell-init-optional) in the README for setup instructions.

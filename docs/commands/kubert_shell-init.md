@@ -6,7 +6,7 @@ Print shell integration script for the given shell
 
 Print a shell function that wraps the kubert binary.
 
-Source it once in your shell rc file so that env vars like KUBERT_SHELL_CONTEXT
+Optionally source it once in your shell rc file so that env vars like KUBERT_SHELL_CONTEXT
 are kept accurate after in-place context switches.
 
   bash/zsh:  eval "$(kubert shell-init bash)"
