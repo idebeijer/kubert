@@ -356,7 +356,21 @@ func writeContextToExistingFile(kubeconfigPath, selectedContextName, namespace, 
 	if err != nil {
 		return err
 	}
-	return clientcmd.WriteToFile(*newConfig, targetPath)
+	tmp, err := os.CreateTemp(filepath.Dir(targetPath), "kubert-*.yaml")
+	if err != nil {
+		return fmt.Errorf("failed to create temp kubeconfig: %w", err)
+	}
+	tmpName := tmp.Name()
+	_ = tmp.Close()
+	if err := clientcmd.WriteToFile(*newConfig, tmpName); err != nil {
+		_ = os.Remove(tmpName)
+		return fmt.Errorf("failed to write kubeconfig: %w", err)
+	}
+	if err := os.Rename(tmpName, targetPath); err != nil {
+		_ = os.Remove(tmpName)
+		return fmt.Errorf("failed to replace kubeconfig: %w", err)
+	}
+	return nil
 }
 
 func getUserShell() string {

@@ -28,7 +28,7 @@ export KUBERT_SHELL_INIT_SHELL=bash
 kubert() {
   command kubert "$@"
   local _ec=$?
-  local _d="${XDG_RUNTIME_DIR:-/tmp}"
+  local _d="${XDG_RUNTIME_DIR:-${TMPDIR:-/tmp}}"
   local _f="${_d}/kubert-env-$$"
   if [[ -f "$_f" ]]; then
     # shellcheck source=/dev/null
@@ -50,7 +50,7 @@ export KUBERT_SHELL_INIT_SHELL=zsh
 kubert() {
   command kubert "$@"
   local _ec=$?
-  local _d="${XDG_RUNTIME_DIR:-/tmp}"
+  local _d="${XDG_RUNTIME_DIR:-${TMPDIR:-/tmp}}"
   local _f="${_d}/kubert-env-$$"
   if [[ -f "$_f" ]]; then
     source "$_f"
@@ -72,6 +72,7 @@ function kubert
   command kubert $argv
   set _ec $status
   set _d "$XDG_RUNTIME_DIR"
+  test -z "$_d"; and set _d "$TMPDIR"
   test -z "$_d"; and set _d /tmp
   set _f "$_d/kubert-env-$fish_pid"
   if test -f $_f
@@ -135,14 +136,15 @@ func validateShell(name string) (string, error) {
 
 // envUpdateFilePath returns the path of the env-update file that the shell
 // function will source after an in-place context switch.
-// Uses XDG_RUNTIME_DIR when set (user-owned, 0700) so the path is not
-// predictable by other users; falls back to os.TempDir().
+// Priority: XDG_RUNTIME_DIR (user-owned, 0700) > TMPDIR > /tmp.
+// Must match the lookup order in the generated shell scripts.
 func envUpdateFilePath(shellPID int) string {
-	dir := os.Getenv("XDG_RUNTIME_DIR")
-	if dir == "" {
-		dir = os.TempDir()
+	for _, v := range []string{"XDG_RUNTIME_DIR", "TMPDIR"} {
+		if dir := os.Getenv(v); dir != "" {
+			return filepath.Join(dir, fmt.Sprintf("kubert-env-%d", shellPID))
+		}
 	}
-	return filepath.Join(dir, fmt.Sprintf("kubert-env-%d", shellPID))
+	return filepath.Join("/tmp", fmt.Sprintf("kubert-env-%d", shellPID))
 }
 
 // writeEnvUpdateFile writes updated KUBERT_SHELL_* vars to a file that the
