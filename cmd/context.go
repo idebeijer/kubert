@@ -23,7 +23,8 @@ type ContextOptions struct {
 	Out    io.Writer
 	ErrOut io.Writer
 
-	Args []string
+	Args      []string
+	Recursive bool
 
 	Config         config.Config
 	ContextLoader  func() ([]kubeconfig.Context, error)
@@ -32,6 +33,7 @@ type ContextOptions struct {
 	IsInteractive  func() bool
 	ShellLauncher  func(kubeconfigPath, originalPath, contextName string, cfg config.Config) error
 	TempFileWriter func(kubeconfigPath, contextName, namespace string) (*os.File, func(), error)
+	InPlaceWriter  func(kubeconfigPath, contextName, namespace, targetPath string) error
 }
 
 func NewContextOptions() *ContextOptions {
@@ -52,6 +54,7 @@ func NewContextOptions() *ContextOptions {
 			return launchShellWithKubeconfig(kubeconfigPath, originalPath, contextName, cfg)
 		},
 		TempFileWriter: createTempKubeconfigFile,
+		InPlaceWriter:  writeContextToExistingFile,
 	}
 }
 
@@ -86,6 +89,8 @@ Use '-' to switch to the previously selected context.`,
 			return o.Run()
 		},
 	}
+
+	cmd.Flags().BoolVar(&o.Recursive, "recursive", false, "spawn a new shell even when already inside a kubert shell")
 
 	return cmd
 }
@@ -130,6 +135,10 @@ func (o *ContextOptions) Run() error {
 		return fmt.Errorf("context %s not found", selectedContextName)
 	}
 
+	if os.Getenv(kubert.ShellActiveEnvVar) == "1" && !o.Recursive {
+		return o.switchContextInPlace(sm, selectedContextName, selectedContext)
+	}
+
 	contextInState, _ := sm.ContextInfo(selectedContextName)
 	tempKubeconfig, cleanup, err := o.TempFileWriter(selectedContext.FilePath, selectedContextName, contextInState.LastNamespace)
 	if err != nil {
@@ -144,6 +153,42 @@ func (o *ContextOptions) Run() error {
 	}
 
 	return o.ShellLauncher(tempKubeconfig.Name(), selectedContext.FilePath, selectedContextName, o.Config)
+}
+
+func (o *ContextOptions) switchContextInPlace(sm *state.Manager, contextName string, ctx kubeconfig.Context) error {
+	existingKubeconfigPath := os.Getenv(kubert.ShellKubeconfigEnvVar)
+	if existingKubeconfigPath == "" {
+		return fmt.Errorf("KUBERT_SHELL_KUBECONFIG not set; cannot switch context in-place")
+	}
+
+	contextInState, _ := sm.ContextInfo(contextName)
+
+	// Fire post-context hook before switching (signals leaving the old context).
+	if o.Config.Hooks.PostShell != "" {
+		if err := executeHook(o.Config.Hooks.PostShell, "post-context"); err != nil {
+			slog.Warn("Failed to execute post-context hook", "error", err)
+		}
+	}
+
+	if err := o.InPlaceWriter(ctx.FilePath, contextName, contextInState.LastNamespace, existingKubeconfigPath); err != nil {
+		return fmt.Errorf("failed to update kubeconfig: %w", err)
+	}
+
+	if err := sm.SetLastContext(contextName); err != nil {
+		slog.Warn("Failed to save last context", "error", err)
+	}
+
+	// Fire pre-context hook after switching (signals entering the new context).
+	// Inject the new context name so the hook sees the correct value even though
+	// KUBERT_SHELL_CONTEXT in the running shell cannot be updated from a child process.
+	if o.Config.Hooks.PreShell != "" {
+		if err := executeHook(o.Config.Hooks.PreShell, "pre-context", kubert.ShellContextEnvVar+"="+contextName); err != nil {
+			slog.Warn("Failed to execute pre-context hook", "error", err)
+		}
+	}
+
+	fmt.Fprintf(o.Out, "Switched to context %q\n", contextName)
+	return nil
 }
 
 func (o *ContextOptions) selectContextName(contextNames []string, sm *state.Manager) (string, error) {
@@ -190,27 +235,25 @@ func findContextByName(contexts []kubeconfig.Context, name string) (kubeconfig.C
 	return kubeconfig.Context{}, false
 }
 
-func createTempKubeconfigFile(kubeconfigPath, selectedContextName, namespace string) (*os.File, func(), error) {
-	// Load the original kubeconfig
+func buildKubeconfigForContext(kubeconfigPath, selectedContextName, namespace string) (*api.Config, error) {
 	cfg, err := clientcmd.LoadFromFile(kubeconfigPath)
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
 
 	selectedContext := cfg.Contexts[selectedContextName]
 	if selectedContext == nil {
-		return nil, nil, fmt.Errorf("context %s not found in kubeconfig", selectedContextName)
+		return nil, fmt.Errorf("context %s not found in kubeconfig", selectedContextName)
 	}
 	selectedCluster := cfg.Clusters[selectedContext.Cluster]
 	if selectedCluster == nil {
-		return nil, nil, fmt.Errorf("cluster %s not found in kubeconfig", selectedContext.Cluster)
+		return nil, fmt.Errorf("cluster %s not found in kubeconfig", selectedContext.Cluster)
 	}
 	selectedAuthInfo := cfg.AuthInfos[selectedContext.AuthInfo]
 	if selectedAuthInfo == nil {
-		return nil, nil, fmt.Errorf("auth info %s not found in kubeconfig", selectedContext.AuthInfo)
+		return nil, fmt.Errorf("auth info %s not found in kubeconfig", selectedContext.AuthInfo)
 	}
 
-	// Build a new kubeconfig with only the selected context
 	newConfig := api.NewConfig()
 	newConfig.Contexts[selectedContextName] = selectedContext
 	newConfig.Clusters[selectedContext.Cluster] = selectedCluster
@@ -220,12 +263,20 @@ func createTempKubeconfigFile(kubeconfigPath, selectedContextName, namespace str
 		newConfig.Contexts[selectedContextName].Namespace = namespace
 	}
 
+	return newConfig, nil
+}
+
+func createTempKubeconfigFile(kubeconfigPath, selectedContextName, namespace string) (*os.File, func(), error) {
+	newConfig, err := buildKubeconfigForContext(kubeconfigPath, selectedContextName, namespace)
+	if err != nil {
+		return nil, nil, err
+	}
+
 	tempKubeconfig, err := os.CreateTemp("", "kubert-*.yaml")
 	if err != nil {
 		return nil, nil, err
 	}
-	err = tempKubeconfig.Chmod(0o600)
-	if err != nil {
+	if err = tempKubeconfig.Chmod(0o600); err != nil {
 		return nil, nil, err
 	}
 
@@ -240,6 +291,14 @@ func createTempKubeconfigFile(kubeconfigPath, selectedContextName, namespace str
 	}
 
 	return tempKubeconfig, cleanup, nil
+}
+
+func writeContextToExistingFile(kubeconfigPath, selectedContextName, namespace, targetPath string) error {
+	newConfig, err := buildKubeconfigForContext(kubeconfigPath, selectedContextName, namespace)
+	if err != nil {
+		return err
+	}
+	return clientcmd.WriteToFile(*newConfig, targetPath)
 }
 
 func getUserShell() string {
@@ -313,9 +372,11 @@ func launchShellWithKubeconfig(kubeconfigPath, originalKubeconfigPath, contextNa
 	return nil
 }
 
-func executeHook(hookCommand, hookType string) error {
+func executeHook(hookCommand, hookType string, extraEnv ...string) error {
 	hookCmd := exec.Command(getUserShell(), "-c", hookCommand)
-	hookCmd.Env = os.Environ()
+	env := os.Environ()
+	env = append(env, extraEnv...)
+	hookCmd.Env = env
 	hookCmd.Stdout = os.Stdout
 	hookCmd.Stderr = os.Stderr
 

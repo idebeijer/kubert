@@ -16,6 +16,7 @@ import (
 
 	"github.com/idebeijer/kubert/internal/config"
 	"github.com/idebeijer/kubert/internal/kubeconfig"
+	"github.com/idebeijer/kubert/internal/kubert"
 	"github.com/idebeijer/kubert/internal/state"
 )
 
@@ -718,4 +719,228 @@ func TestFindContextByName(t *testing.T) {
 			t.Error("Should not find nonexistent context")
 		}
 	})
+}
+
+func TestContextOptions_Run_InPlaceSwitch(t *testing.T) {
+	var buf bytes.Buffer
+	inPlaceWriterCalled := false
+	shellLauncherCalled := false
+
+	// Create a real temp file to act as the existing kubeconfig managed by kubert.
+	existingKubeconfig, err := os.CreateTemp("", "kubert-existing-*.yaml")
+	if err != nil {
+		t.Fatalf("Failed to create temp file: %v", err)
+	}
+	defer func() {
+		_ = existingKubeconfig.Close()
+		_ = os.Remove(existingKubeconfig.Name())
+	}()
+
+	t.Setenv(kubert.ShellActiveEnvVar, "1")
+	t.Setenv(kubert.ShellKubeconfigEnvVar, existingKubeconfig.Name())
+
+	o := &ContextOptions{
+		Out:    &buf,
+		ErrOut: &buf,
+		Args:   []string{"ctx-b"},
+		Config: config.Config{},
+		ContextLoader: func() ([]kubeconfig.Context, error) {
+			return []kubeconfig.Context{
+				{Name: "ctx-b", WithPath: kubeconfig.WithPath{FilePath: "/tmp/config"}},
+			}, nil
+		},
+		StateManager: func() (*state.Manager, error) {
+			setupTestXDGDataHome(t)
+			return state.NewManager()
+		},
+		IsInteractive: func() bool { return false },
+		ShellLauncher: func(_, _, _ string, _ config.Config) error {
+			shellLauncherCalled = true
+			return nil
+		},
+		TempFileWriter: func(_, _, _ string) (*os.File, func(), error) {
+			t.Error("TempFileWriter should not be called for in-place switch")
+			return nil, nil, nil
+		},
+		InPlaceWriter: func(_, contextName, _, targetPath string) error {
+			inPlaceWriterCalled = true
+			if contextName != "ctx-b" {
+				t.Errorf("Expected context name 'ctx-b', got '%s'", contextName)
+			}
+			if targetPath != existingKubeconfig.Name() {
+				t.Errorf("Expected target path %q, got %q", existingKubeconfig.Name(), targetPath)
+			}
+			return nil
+		},
+	}
+
+	if err := o.Run(); err != nil {
+		t.Fatalf("Run() returned unexpected error: %v", err)
+	}
+
+	if !inPlaceWriterCalled {
+		t.Error("InPlaceWriter should have been called for in-place switch")
+	}
+	if shellLauncherCalled {
+		t.Error("ShellLauncher should not have been called for in-place switch")
+	}
+	if !strings.Contains(buf.String(), "ctx-b") {
+		t.Errorf("Expected output to mention ctx-b, got: %q", buf.String())
+	}
+}
+
+func TestContextOptions_Run_InPlaceSwitch_Recursive(t *testing.T) {
+	shellLauncherCalled := false
+
+	existingKubeconfig, err := os.CreateTemp("", "kubert-existing-*.yaml")
+	if err != nil {
+		t.Fatalf("Failed to create temp file: %v", err)
+	}
+	defer func() {
+		_ = existingKubeconfig.Close()
+		_ = os.Remove(existingKubeconfig.Name())
+	}()
+
+	t.Setenv(kubert.ShellActiveEnvVar, "1")
+	t.Setenv(kubert.ShellKubeconfigEnvVar, existingKubeconfig.Name())
+
+	o := &ContextOptions{
+		Out:       &bytes.Buffer{},
+		ErrOut:    &bytes.Buffer{},
+		Args:      []string{"ctx-b"},
+		Recursive: true,
+		Config:    config.Config{},
+		ContextLoader: func() ([]kubeconfig.Context, error) {
+			return []kubeconfig.Context{
+				{Name: "ctx-b", WithPath: kubeconfig.WithPath{FilePath: "/tmp/config"}},
+			}, nil
+		},
+		StateManager: func() (*state.Manager, error) {
+			setupTestXDGDataHome(t)
+			return state.NewManager()
+		},
+		IsInteractive: func() bool { return false },
+		ShellLauncher: func(_, _, _ string, _ config.Config) error {
+			shellLauncherCalled = true
+			return nil
+		},
+		TempFileWriter: func(_, _, _ string) (*os.File, func(), error) {
+			f, err := os.CreateTemp("", "test-*.yaml")
+			if err != nil {
+				return nil, nil, err
+			}
+			return f, func() { _ = os.Remove(f.Name()) }, nil
+		},
+		InPlaceWriter: func(_, _, _, _ string) error {
+			t.Error("InPlaceWriter should not be called when --recursive is set")
+			return nil
+		},
+	}
+
+	if err := o.Run(); err != nil {
+		t.Fatalf("Run() returned unexpected error: %v", err)
+	}
+
+	if !shellLauncherCalled {
+		t.Error("ShellLauncher should have been called when --recursive is set")
+	}
+}
+
+func TestContextOptions_Run_InPlaceSwitch_HooksFire(t *testing.T) {
+	preHookFired := false
+	postHookFired := false
+
+	existingKubeconfig, err := os.CreateTemp("", "kubert-existing-*.yaml")
+	if err != nil {
+		t.Fatalf("Failed to create temp file: %v", err)
+	}
+	defer func() {
+		_ = existingKubeconfig.Close()
+		_ = os.Remove(existingKubeconfig.Name())
+	}()
+
+	t.Setenv(kubert.ShellActiveEnvVar, "1")
+	t.Setenv(kubert.ShellKubeconfigEnvVar, existingKubeconfig.Name())
+
+	preFile := filepath.Join(t.TempDir(), "pre-fired")
+	postFile := filepath.Join(t.TempDir(), "post-fired")
+
+	o := &ContextOptions{
+		Out:    &bytes.Buffer{},
+		ErrOut: &bytes.Buffer{},
+		Args:   []string{"ctx-b"},
+		Config: config.Config{
+			Hooks: config.Hooks{
+				PreShell:  fmt.Sprintf("touch %s", preFile),
+				PostShell: fmt.Sprintf("touch %s", postFile),
+			},
+		},
+		ContextLoader: func() ([]kubeconfig.Context, error) {
+			return []kubeconfig.Context{
+				{Name: "ctx-b", WithPath: kubeconfig.WithPath{FilePath: "/tmp/config"}},
+			}, nil
+		},
+		StateManager: func() (*state.Manager, error) {
+			setupTestXDGDataHome(t)
+			return state.NewManager()
+		},
+		IsInteractive: func() bool { return false },
+		ShellLauncher: func(_, _, _ string, _ config.Config) error {
+			t.Error("ShellLauncher should not be called for in-place switch")
+			return nil
+		},
+		TempFileWriter: func(_, _, _ string) (*os.File, func(), error) {
+			t.Error("TempFileWriter should not be called for in-place switch")
+			return nil, nil, nil
+		},
+		InPlaceWriter: func(_, _, _, _ string) error { return nil },
+	}
+
+	if err := o.Run(); err != nil {
+		t.Fatalf("Run() returned unexpected error: %v", err)
+	}
+
+	if _, err := os.Stat(preFile); err == nil {
+		preHookFired = true
+	}
+	if _, err := os.Stat(postFile); err == nil {
+		postHookFired = true
+	}
+
+	if !preHookFired {
+		t.Error("pre-context hook should have fired on in-place switch")
+	}
+	if !postHookFired {
+		t.Error("post-context hook should have fired on in-place switch")
+	}
+}
+
+func TestContextOptions_Run_InPlaceSwitch_MissingKubeconfigEnvVar(t *testing.T) {
+	t.Setenv(kubert.ShellActiveEnvVar, "1")
+	// Deliberately not setting KUBERT_SHELL_KUBECONFIG.
+
+	o := &ContextOptions{
+		Out:    &bytes.Buffer{},
+		ErrOut: &bytes.Buffer{},
+		Args:   []string{"ctx-b"},
+		Config: config.Config{},
+		ContextLoader: func() ([]kubeconfig.Context, error) {
+			return []kubeconfig.Context{
+				{Name: "ctx-b", WithPath: kubeconfig.WithPath{FilePath: "/tmp/config"}},
+			}, nil
+		},
+		StateManager: func() (*state.Manager, error) {
+			setupTestXDGDataHome(t)
+			return state.NewManager()
+		},
+		IsInteractive: func() bool { return false },
+	}
+
+	err := o.Run()
+	if err == nil {
+		t.Fatal("Expected error when KUBERT_SHELL_KUBECONFIG is not set, got nil")
+	}
+	if !strings.Contains(err.Error(), "KUBERT_SHELL_KUBECONFIG not set") {
+		t.Errorf("Unexpected error message: %v", err)
+	}
 }
