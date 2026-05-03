@@ -27,6 +27,7 @@ Keep in mind, this will only work when using kubectl through the "kubert kubectl
 * [kubert kubectl](kubert_kubectl.md)	 - Wrapper for kubectl
 * [kubert ns](kubert_ns.md)	 - Switch to a different namespace
 * [kubert protection](kubert_protection.md)	 - Manage context protection
+* [kubert shell-init](kubert_shell-init.md)	 - Print shell integration script for the given shell
 * [kubert version](kubert_version.md)	 - Display version and build information
 * [kubert which](kubert_which.md)	 - Display information about current context, cluster, namespace, or config
 
