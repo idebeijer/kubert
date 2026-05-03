@@ -24,7 +24,7 @@ type ContextOptions struct {
 	Out    io.Writer
 	ErrOut io.Writer
 
-	Args      []string
+	Args   []string
 	Nested bool
 
 	Config         config.Config

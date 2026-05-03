@@ -81,7 +81,7 @@ func TestWriteEnvUpdateFile_Bash(t *testing.T) {
 	}
 
 	path := envUpdateFilePath(os.Getppid())
-	defer os.Remove(path)
+	t.Cleanup(func() { _ = os.Remove(path) })
 
 	data, err := os.ReadFile(path)
 	if err != nil {
@@ -100,7 +100,7 @@ func TestWriteEnvUpdateFile_Fish(t *testing.T) {
 	}
 
 	path := envUpdateFilePath(os.Getppid())
-	defer os.Remove(path)
+	t.Cleanup(func() { _ = os.Remove(path) })
 
 	data, err := os.ReadFile(path)
 	if err != nil {

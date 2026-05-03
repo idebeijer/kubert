@@ -864,11 +864,11 @@ func TestContextOptions_Run_InPlaceSwitch_Nested(t *testing.T) {
 	t.Setenv(kubert.ShellKubeconfigEnvVar, existingKubeconfig.Name())
 
 	o := &ContextOptions{
-		Out:       &bytes.Buffer{},
-		ErrOut:    &bytes.Buffer{},
-		Args:      []string{"ctx-b"},
+		Out:    &bytes.Buffer{},
+		ErrOut: &bytes.Buffer{},
+		Args:   []string{"ctx-b"},
 		Nested: true,
-		Config:    config.Config{},
+		Config: config.Config{},
 		ContextLoader: func() ([]kubeconfig.Context, error) {
 			return []kubeconfig.Context{
 				{Name: "ctx-b", WithPath: kubeconfig.WithPath{FilePath: "/tmp/config"}},

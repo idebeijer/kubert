@@ -21,6 +21,8 @@ import (
 	"github.com/idebeijer/kubert/internal/util"
 )
 
+const kubectlBin = "kubectl"
+
 type KubectlOptions struct {
 	Out    io.Writer
 	ErrOut io.Writer
@@ -48,7 +50,7 @@ func NewKubectlOptions() *KubectlOptions {
 			return clientConfig, nil
 		},
 		CommandRunner: func(args []string) error {
-			kubectlCmd := exec.Command("kubectl", args...)
+			kubectlCmd := exec.Command(kubectlBin, args...)
 			kubectlCmd.Stdin = os.Stdin
 			kubectlCmd.Stdout = os.Stdout
 			kubectlCmd.Stderr = os.Stderr
@@ -74,7 +76,7 @@ func NewKubectlCommand() *cobra.Command {
 		Long:               `Wrapper for kubectl, to support context protection with "kubert protection".`,
 		DisableFlagParsing: true,
 		PreRunE: func(cmd *cobra.Command, args []string) error {
-			_, err := exec.LookPath("kubectl")
+			_, err := exec.LookPath(kubectlBin)
 			if err != nil {
 				return fmt.Errorf("kubectl not found in PATH")
 			}
