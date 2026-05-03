@@ -206,6 +206,7 @@ func (o *ContextOptions) switchContextInPlace(sm *state.Manager, contextName str
 		fmt.Fprintln(o.ErrOut, "         Use --nested or set 'nested: true' in config to restore the previous behaviour.")
 		fmt.Fprintln(o.ErrOut)
 		fmt.Fprintln(o.ErrOut, "         See https://github.com/idebeijer/kubert/releases/tag/v0.8.0 for details.")
+		fmt.Fprintln(o.ErrOut)
 		fmt.Fprintf(o.ErrOut, "         %s\n", timesNote)
 		if err := sm.RecordInPlaceSwitchWarn(); err != nil {
 			slog.Warn("Failed to record in-place switch warning count", "error", err)

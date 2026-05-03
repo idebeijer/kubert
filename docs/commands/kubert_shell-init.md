@@ -1,10 +1,10 @@
 ## kubert shell-init
 
-Print shell integration script for the given shell
+Print optional shell integration script for the given shell
 
 ### Synopsis
 
-Print a shell function that wraps the kubert binary.
+Print an optional shell function that wraps the kubert binary. (not required for core functionality)
 
 Optionally source it once in your shell rc file so that env vars like KUBERT_SHELL_CONTEXT
 are kept accurate after in-place context switches.

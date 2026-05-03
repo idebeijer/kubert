@@ -86,8 +86,8 @@ end
 func NewShellInitCommand() *cobra.Command {
 	return &cobra.Command{
 		Use:   "shell-init [bash|zsh|fish]",
-		Short: "Print shell integration script for the given shell",
-		Long: `Print a shell function that wraps the kubert binary.
+		Short: "Print optional shell integration script for the given shell",
+		Long: `Print an optional shell function that wraps the kubert binary. (not required for core functionality)
 
 Optionally source it once in your shell rc file so that env vars like KUBERT_SHELL_CONTEXT
 are kept accurate after in-place context switches.
