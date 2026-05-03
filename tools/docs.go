@@ -13,29 +13,32 @@ import (
 	"github.com/idebeijer/kubert/cmd"
 )
 
+const docsDir = "./docs/commands"
+
 func main() {
 	kubertCmd := cmd.NewRootCmd()
 
-	// delete old docs
-	if err := os.RemoveAll("./docs"); err != nil {
+	// Wipe and recreate only the generated subtree, leaving hand-written docs untouched.
+	if err := os.RemoveAll(docsDir); err != nil {
 		log.Fatal(err)
 	}
-	if err := os.MkdirAll("./docs", 0750); err != nil {
+	if err := os.MkdirAll(docsDir, 0750); err != nil {
 		log.Fatal(err)
 	}
 
 	kubertCmd.DisableAutoGenTag = true
-	if err := doc.GenMarkdownTree(kubertCmd.Command, "./docs"); err != nil {
+	if err := doc.GenMarkdownTree(kubertCmd.Command, docsDir); err != nil {
 		log.Fatal(err)
 	}
 
 	// Add "sh" to all example code blocks
-	if err := addShellToCodeBlocks("./docs"); err != nil {
+	if err := addShellToCodeBlocks(docsDir); err != nil {
 		log.Fatal(err)
 	}
 
-	// Copy kubert.md to README.md with a note
-	data, err := os.ReadFile("./docs/kubert.md")
+	// Copy kubert.md to README.md with a note so GitHub renders it when
+	// browsing to docs/commands/.
+	data, err := os.ReadFile(filepath.Join(docsDir, "kubert.md"))
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -45,7 +48,7 @@ func main() {
 		"> This file is a generated copy of `kubert.md`.\n\n")
 	data = append(note, data...)
 
-	if err := os.WriteFile("./docs/README.md", data, 0600); err != nil {
+	if err := os.WriteFile(filepath.Join(docsDir, "README.md"), data, 0600); err != nil {
 		log.Fatal(err)
 	}
 }

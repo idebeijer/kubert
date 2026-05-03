@@ -124,7 +124,7 @@ kubert kubeconfig lint  # check kubeconfig files for errors and issues
 
 ## Command Reference
 
-For more information on all commands, see the [docs](docs/README.md).
+For more information on all commands, see the [docs](docs/commands/README.md).
 
 ## Configuration
 
@@ -146,6 +146,11 @@ kubeconfigs:
 # Use `fzf` for interactive context/namespace selection when available.
 # If `fzf` is not found, kubert falls back to a non-interactive list.
 interactive: true
+
+# Context switch mode when already inside a kubert shell:
+# - false (default): switch context in-place, stay in the same shell
+# - true: spawn a new nested sub-shell with the new context (nested mode)
+nested: false
 
 # Protect contexts against accidental destructive commands. See "Context Protection" below for details. (not configured by default)
 protection:
@@ -198,7 +203,7 @@ This can also be overridden via environment variable: `KUBERT_FZF_OPTS`.
 
 ### Shell Hooks
 
-Hooks let you run shell commands before and after kubert spawns the subshell. They execute in the parent shell, so you can adjust prompts, send notifications, or log actions.
+Hooks let you run shell commands before and after kubert spawns the subshell (and on every in-place context switch). They run in a child shell process attached to the same TTY, so terminal-side effects like updating the tab title, sending notifications, or logging actions work, but environment changes such as `export` or prompt-variable updates do not persist in the caller's shell.
 
 Name shell tab after selected Kubernetes context:
 
@@ -207,6 +212,34 @@ hooks:
   preShell: 'echo "\033]0;k8s: $KUBERT_SHELL_CONTEXT\007"'
   postShell: 'echo "\033]0;\007"'
 ```
+
+> **Note:** `$KUBERT_SHELL_CONTEXT` in hooks is only available and reliable when shell-init is configured. See [Shell Init](#shell-init-optional) below.
+
+### Shell Init (Optional)
+
+`kubert shell-init` prints a shell function that wraps the `kubert` binary. When
+sourced, it enables kubert to keep `KUBERT_SHELL_CONTEXT` and
+`KUBERT_SHELL_ORIGINAL_KUBECONFIG` up to date across in-place context switches —
+something kubert cannot do on its own because a child process cannot modify its
+parent shell's environment.
+
+Add one of the following to your shell config:
+
+```sh
+# Bash (~/.bashrc)
+eval "$(kubert shell-init bash)"
+
+# Zsh (~/.zshrc)
+eval "$(kubert shell-init zsh)"
+
+# Fish (~/.config/fish/config.fish)
+kubert shell-init fish | source
+```
+
+Without shell-init, `KUBERT_SHELL_CONTEXT` and `KUBERT_SHELL_ORIGINAL_KUBECONFIG`
+are intentionally not set (a stale value is worse than no value). `KUBECONFIG`
+always works correctly regardless because kubert rewrites the file contents
+in-place rather than changing the path.
 
 ### Starship Prompt Integration
 
@@ -294,6 +327,28 @@ kubert protection remove    # remove explicit override, fall back to default reg
 ```
 
 When a protected context sees a protected command, kubert will prompt for confirmation (`prompt: true`) or exit immediately (`prompt: false`).
+
+## Limitations
+
+### `KUBERT_SHELL_CONTEXT` requires shell-init to stay accurate
+
+When you switch contexts inside an active kubert shell (in-place switch), kubert
+runs as a child process of your shell. A child process cannot modify environment
+variables in its parent — so `KUBERT_SHELL_CONTEXT` would go stale the moment
+you switch context for the first time.
+
+`KUBECONFIG` avoids this problem because kubert rewrites the _file contents_
+rather than changing the variable value — the path stays the same, kubectl picks
+up the new context automatically.
+
+For `KUBERT_SHELL_CONTEXT` and `KUBERT_SHELL_ORIGINAL_KUBECONFIG` to stay
+accurate, kubert needs cooperation from the shell itself. `kubert shell-init`
+provides this: the generated shell function sources a small env-update file after
+every `kubert ctx` call so these vars are always current.
+
+Without shell-init, both vars are intentionally not set to avoid misleading stale
+values. Configure shell-init if you rely on `$KUBERT_SHELL_CONTEXT` in hooks or
+your prompt. See [Shell Init](#shell-init-optional) for setup.
 
 ## Contributing
 

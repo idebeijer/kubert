@@ -29,7 +29,8 @@ kubert ctx [context-name | -] [flags]
 ### Options
 
 ```
-  -h, --help   help for ctx
+  -h, --help     help for ctx
+      --nested   spawn a nested sub-shell instead of switching context in-place
 ```
 
 ### Options inherited from parent commands

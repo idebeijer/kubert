@@ -6,8 +6,11 @@ import (
 	"log/slog"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"sort"
+	"strings"
 
+	"github.com/fatih/color"
 	"github.com/spf13/cobra"
 	"k8s.io/client-go/tools/clientcmd"
 	"k8s.io/client-go/tools/clientcmd/api"
@@ -23,7 +26,8 @@ type ContextOptions struct {
 	Out    io.Writer
 	ErrOut io.Writer
 
-	Args []string
+	Args   []string
+	Nested bool
 
 	Config         config.Config
 	ContextLoader  func() ([]kubeconfig.Context, error)
@@ -32,6 +36,7 @@ type ContextOptions struct {
 	IsInteractive  func() bool
 	ShellLauncher  func(kubeconfigPath, originalPath, contextName string, cfg config.Config) error
 	TempFileWriter func(kubeconfigPath, contextName, namespace string) (*os.File, func(), error)
+	InPlaceWriter  func(kubeconfigPath, contextName, namespace, targetPath string) error
 }
 
 func NewContextOptions() *ContextOptions {
@@ -52,6 +57,7 @@ func NewContextOptions() *ContextOptions {
 			return launchShellWithKubeconfig(kubeconfigPath, originalPath, contextName, cfg)
 		},
 		TempFileWriter: createTempKubeconfigFile,
+		InPlaceWriter:  writeContextToExistingFile,
 	}
 }
 
@@ -87,6 +93,8 @@ Use '-' to switch to the previously selected context.`,
 		},
 	}
 
+	cmd.Flags().BoolVar(&o.Nested, "nested", false, "spawn a nested sub-shell instead of switching context in-place")
+
 	return cmd
 }
 
@@ -95,6 +103,7 @@ func (o *ContextOptions) Complete(cmd *cobra.Command, args []string) error {
 	o.ErrOut = cmd.ErrOrStderr()
 	o.Args = args
 	o.Config = config.Cfg
+	o.Nested = o.Nested || o.Config.Nested
 	return nil
 }
 
@@ -130,6 +139,10 @@ func (o *ContextOptions) Run() error {
 		return fmt.Errorf("context %s not found", selectedContextName)
 	}
 
+	if os.Getenv(kubert.ShellActiveEnvVar) == "1" && !o.Nested {
+		return o.switchContextInPlace(sm, selectedContextName, selectedContext)
+	}
+
 	contextInState, _ := sm.ContextInfo(selectedContextName)
 	tempKubeconfig, cleanup, err := o.TempFileWriter(selectedContext.FilePath, selectedContextName, contextInState.LastNamespace)
 	if err != nil {
@@ -144,6 +157,97 @@ func (o *ContextOptions) Run() error {
 	}
 
 	return o.ShellLauncher(tempKubeconfig.Name(), selectedContext.FilePath, selectedContextName, o.Config)
+}
+
+func validateManagedKubeconfigPath(path string) error {
+	clean := filepath.Clean(path)
+	tmpDir := filepath.Clean(os.TempDir())
+	if !strings.HasPrefix(clean, tmpDir+string(filepath.Separator)) {
+		return fmt.Errorf("KUBERT_SHELL_KUBECONFIG %q is not inside the system temp directory, refusing to overwrite", path)
+	}
+	fi, err := os.Lstat(clean)
+	if err != nil {
+		return fmt.Errorf("cannot stat KUBERT_SHELL_KUBECONFIG: %w", err)
+	}
+	if !fi.Mode().IsRegular() {
+		return fmt.Errorf("KUBERT_SHELL_KUBECONFIG %q is not a regular file, refusing to overwrite", path)
+	}
+	return nil
+}
+
+func (o *ContextOptions) switchContextInPlace(sm *state.Manager, contextName string, ctx kubeconfig.Context) error {
+	existingKubeconfigPath := os.Getenv(kubert.ShellKubeconfigEnvVar)
+	if existingKubeconfigPath == "" {
+		return fmt.Errorf("KUBERT_SHELL_KUBECONFIG not set; cannot switch context in-place")
+	}
+	if err := validateManagedKubeconfigPath(existingKubeconfigPath); err != nil {
+		return err
+	}
+
+	if n := sm.InPlaceSwitchWarnCount(); n < state.InPlaceSwitchWarnMax {
+		yellow := color.New(color.FgHiYellow).SprintFunc()
+		remaining := state.InPlaceSwitchWarnMax - n - 1
+		var timesNote string
+		switch remaining {
+		case 0:
+			timesNote = "(last time this warning is shown)"
+		case 1:
+			timesNote = "(this warning will be shown 1 more time)"
+		default:
+			timesNote = fmt.Sprintf("(this warning will be shown %d more times)", remaining)
+		}
+		fmt.Fprintf(o.ErrOut, "%s kubert context behavior has changed (v0.8.0+) - showing this warning because you switched contexts in an active kubert shell.\n",
+			yellow("Warning:"))
+		fmt.Fprintln(o.ErrOut)
+		fmt.Fprintln(o.ErrOut, "         Contexts are now updated in-place instead of spawning a new nested shell on every switch.")
+		fmt.Fprintln(o.ErrOut, "         This does not break isolation between shells, but kubert will now reuse the existing shell rather than nesting a new one.")
+		fmt.Fprintln(o.ErrOut)
+		fmt.Fprintln(o.ErrOut, "         You can safely ignore this if you don't rely on a new nested sub-shell being created on every context switch.")
+		fmt.Fprintln(o.ErrOut, "         Use --nested or set 'nested: true' in config to restore the previous behaviour.")
+		fmt.Fprintln(o.ErrOut)
+		fmt.Fprintln(o.ErrOut, "         See https://github.com/idebeijer/kubert/releases/tag/v0.8.0 for details.")
+		fmt.Fprintln(o.ErrOut)
+		fmt.Fprintf(o.ErrOut, "         %s\n", timesNote)
+		if err := sm.RecordInPlaceSwitchWarn(); err != nil {
+			slog.Warn("Failed to record in-place switch warning count", "error", err)
+		}
+	}
+
+	contextInState, _ := sm.ContextInfo(contextName)
+
+	// Fire post-context hook before switching (signals leaving the old context).
+	if o.Config.Hooks.PostShell != "" {
+		if err := executeHook(o.Config.Hooks.PostShell, "post-context"); err != nil {
+			slog.Warn("Failed to execute post-context hook", "error", err)
+		}
+	}
+
+	if err := o.InPlaceWriter(ctx.FilePath, contextName, contextInState.LastNamespace, existingKubeconfigPath); err != nil {
+		return fmt.Errorf("failed to update kubeconfig: %w", err)
+	}
+
+	if err := sm.SetLastContext(contextName); err != nil {
+		slog.Warn("Failed to save last context", "error", err)
+	}
+
+	// Write env-update file so the shell function can source the new values.
+	if os.Getenv(kubert.ShellInitEnvVar) == "1" {
+		if err := writeEnvUpdateFile(contextName, ctx.FilePath); err != nil {
+			slog.Warn("Failed to write env update file", "error", err)
+		}
+	}
+
+	// Fire pre-context hook after switching (signals entering the new context).
+	// Inject the new context name so the hook sees the correct value even though
+	// KUBERT_SHELL_CONTEXT in the running shell cannot be updated from a child process.
+	if o.Config.Hooks.PreShell != "" {
+		if err := executeHook(o.Config.Hooks.PreShell, "pre-context", kubert.ShellContextEnvVar+"="+contextName); err != nil {
+			slog.Warn("Failed to execute pre-context hook", "error", err)
+		}
+	}
+
+	fmt.Fprintf(o.Out, "Switched to context %q\n", contextName)
+	return nil
 }
 
 func (o *ContextOptions) selectContextName(contextNames []string, sm *state.Manager) (string, error) {
@@ -190,27 +294,25 @@ func findContextByName(contexts []kubeconfig.Context, name string) (kubeconfig.C
 	return kubeconfig.Context{}, false
 }
 
-func createTempKubeconfigFile(kubeconfigPath, selectedContextName, namespace string) (*os.File, func(), error) {
-	// Load the original kubeconfig
+func buildKubeconfigForContext(kubeconfigPath, selectedContextName, namespace string) (*api.Config, error) {
 	cfg, err := clientcmd.LoadFromFile(kubeconfigPath)
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
 
 	selectedContext := cfg.Contexts[selectedContextName]
 	if selectedContext == nil {
-		return nil, nil, fmt.Errorf("context %s not found in kubeconfig", selectedContextName)
+		return nil, fmt.Errorf("context %s not found in kubeconfig", selectedContextName)
 	}
 	selectedCluster := cfg.Clusters[selectedContext.Cluster]
 	if selectedCluster == nil {
-		return nil, nil, fmt.Errorf("cluster %s not found in kubeconfig", selectedContext.Cluster)
+		return nil, fmt.Errorf("cluster %s not found in kubeconfig", selectedContext.Cluster)
 	}
 	selectedAuthInfo := cfg.AuthInfos[selectedContext.AuthInfo]
 	if selectedAuthInfo == nil {
-		return nil, nil, fmt.Errorf("auth info %s not found in kubeconfig", selectedContext.AuthInfo)
+		return nil, fmt.Errorf("auth info %s not found in kubeconfig", selectedContext.AuthInfo)
 	}
 
-	// Build a new kubeconfig with only the selected context
 	newConfig := api.NewConfig()
 	newConfig.Contexts[selectedContextName] = selectedContext
 	newConfig.Clusters[selectedContext.Cluster] = selectedCluster
@@ -220,12 +322,20 @@ func createTempKubeconfigFile(kubeconfigPath, selectedContextName, namespace str
 		newConfig.Contexts[selectedContextName].Namespace = namespace
 	}
 
+	return newConfig, nil
+}
+
+func createTempKubeconfigFile(kubeconfigPath, selectedContextName, namespace string) (*os.File, func(), error) {
+	newConfig, err := buildKubeconfigForContext(kubeconfigPath, selectedContextName, namespace)
+	if err != nil {
+		return nil, nil, err
+	}
+
 	tempKubeconfig, err := os.CreateTemp("", "kubert-*.yaml")
 	if err != nil {
 		return nil, nil, err
 	}
-	err = tempKubeconfig.Chmod(0o600)
-	if err != nil {
+	if err = tempKubeconfig.Chmod(0o600); err != nil {
 		return nil, nil, err
 	}
 
@@ -240,6 +350,29 @@ func createTempKubeconfigFile(kubeconfigPath, selectedContextName, namespace str
 	}
 
 	return tempKubeconfig, cleanup, nil
+}
+
+func writeContextToExistingFile(kubeconfigPath, selectedContextName, namespace, targetPath string) error {
+	newConfig, err := buildKubeconfigForContext(kubeconfigPath, selectedContextName, namespace)
+	if err != nil {
+		return err
+	}
+	tmp, err := os.CreateTemp(filepath.Dir(targetPath), "kubert-*.yaml")
+	if err != nil {
+		return fmt.Errorf("failed to create temp kubeconfig: %w", err)
+	}
+	tmpName := tmp.Name()
+	_ = tmp.Close()
+	if err := clientcmd.WriteToFile(*newConfig, tmpName); err != nil {
+		// #nosec G703 -- tmpName is created by os.CreateTemp, not user input
+		_ = os.Remove(tmpName)
+		return fmt.Errorf("failed to write kubeconfig: %w", err)
+	}
+	if err := os.Rename(tmpName, targetPath); err != nil { // #nosec G703 -- tmpName is created by os.CreateTemp, not user input
+		_ = os.Remove(tmpName)
+		return fmt.Errorf("failed to replace kubeconfig: %w", err)
+	}
+	return nil
 }
 
 func getUserShell() string {
@@ -274,8 +407,13 @@ func launchShellWithKubeconfig(kubeconfigPath, originalKubeconfigPath, contextNa
 	env = append(env, "KUBECONFIG="+kubeconfigPath)
 	env = append(env, kubert.ShellActiveEnvVar+"=1")
 	env = append(env, kubert.ShellKubeconfigEnvVar+"="+kubeconfigPath)
-	env = append(env, kubert.ShellOriginalKubeconfigEnvVar+"="+originalKubeconfigPath)
-	env = append(env, kubert.ShellContextEnvVar+"="+contextName)
+	// Only set KUBERT_SHELL_CONTEXT and KUBERT_SHELL_ORIGINAL_KUBECONFIG when the
+	// shell function is active. Without it there is no mechanism to update these vars
+	// after in-place switches, so a stale value is worse than no value.
+	if os.Getenv(kubert.ShellInitEnvVar) == "1" {
+		env = append(env, kubert.ShellOriginalKubeconfigEnvVar+"="+originalKubeconfigPath)
+		env = append(env, kubert.ShellContextEnvVar+"="+contextName)
+	}
 
 	statefile, _ := state.FilePath()
 	env = append(env, kubert.ShellStateFilePathEnvVar+"="+statefile)
@@ -313,9 +451,11 @@ func launchShellWithKubeconfig(kubeconfigPath, originalKubeconfigPath, contextNa
 	return nil
 }
 
-func executeHook(hookCommand, hookType string) error {
+func executeHook(hookCommand, hookType string, extraEnv ...string) error {
 	hookCmd := exec.Command(getUserShell(), "-c", hookCommand)
-	hookCmd.Env = os.Environ()
+	env := os.Environ()
+	env = append(env, extraEnv...)
+	hookCmd.Env = env
 	hookCmd.Stdout = os.Stdout
 	hookCmd.Stderr = os.Stderr
 

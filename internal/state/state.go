@@ -18,8 +18,9 @@ const (
 )
 
 type State struct {
-	Contexts    map[string]ContextInfo `json:"contexts"`
-	LastContext string                 `json:"last_context,omitempty"`
+	Contexts               map[string]ContextInfo `json:"contexts"`
+	LastContext            string                 `json:"last_context,omitempty"`
+	InPlaceSwitchWarnCount int                    `json:"in_place_switch_warn_count,omitempty"`
 }
 
 type Manager struct {
