@@ -721,6 +721,65 @@ func TestFindContextByName(t *testing.T) {
 	})
 }
 
+func TestContextOptions_Run_WarningSuppressedAfterMax(t *testing.T) {
+	setupTestXDGDataHome(t)
+	sm, err := state.NewManager()
+	if err != nil {
+		t.Fatalf("NewManager: %v", err)
+	}
+
+	existingKubeconfig, err := os.CreateTemp("", "kubert-existing-*.yaml")
+	if err != nil {
+		t.Fatalf("Failed to create temp file: %v", err)
+	}
+	defer func() {
+		_ = existingKubeconfig.Close()
+		_ = os.Remove(existingKubeconfig.Name())
+	}()
+
+	t.Setenv(kubert.ShellActiveEnvVar, "1")
+	t.Setenv(kubert.ShellKubeconfigEnvVar, existingKubeconfig.Name())
+
+	makeOpts := func(errBuf *bytes.Buffer) *ContextOptions {
+		return &ContextOptions{
+			Out:    &bytes.Buffer{},
+			ErrOut: errBuf,
+			Args:   []string{"ctx-b"},
+			Config: config.Config{},
+			ContextLoader: func() ([]kubeconfig.Context, error) {
+				return []kubeconfig.Context{
+					{Name: "ctx-b", WithPath: kubeconfig.WithPath{FilePath: "/tmp/config"}},
+				}, nil
+			},
+			StateManager:   func() (*state.Manager, error) { return sm, nil },
+			IsInteractive:  func() bool { return false },
+			ShellLauncher:  func(_, _, _ string, _ config.Config) error { return nil },
+			TempFileWriter: func(_, _, _ string) (*os.File, func(), error) { return nil, nil, nil },
+			InPlaceWriter:  func(_, _, _, _ string) error { return nil },
+		}
+	}
+
+	// First 3 invocations should print a notice to stderr.
+	for i := 1; i <= state.InPlaceSwitchWarnMax; i++ {
+		var errBuf bytes.Buffer
+		if err := makeOpts(&errBuf).Run(); err != nil {
+			t.Fatalf("Run() invocation %d: %v", i, err)
+		}
+		if !strings.Contains(errBuf.String(), "Warning:") {
+			t.Errorf("invocation %d: expected warning in stderr, got: %q", i, errBuf.String())
+		}
+	}
+
+	// 4th invocation should produce no notice.
+	var errBuf bytes.Buffer
+	if err := makeOpts(&errBuf).Run(); err != nil {
+		t.Fatalf("Run() invocation 4: %v", err)
+	}
+	if strings.Contains(errBuf.String(), "Warning:") {
+		t.Errorf("invocation 4: warning should not appear after max, got: %q", errBuf.String())
+	}
+}
+
 func TestContextOptions_Run_InPlaceSwitch(t *testing.T) {
 	var buf bytes.Buffer
 	inPlaceWriterCalled := false

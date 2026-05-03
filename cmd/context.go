@@ -8,6 +8,7 @@ import (
 	"os/exec"
 	"sort"
 
+	"github.com/fatih/color"
 	"github.com/spf13/cobra"
 	"k8s.io/client-go/tools/clientcmd"
 	"k8s.io/client-go/tools/clientcmd/api"
@@ -160,6 +161,34 @@ func (o *ContextOptions) switchContextInPlace(sm *state.Manager, contextName str
 	existingKubeconfigPath := os.Getenv(kubert.ShellKubeconfigEnvVar)
 	if existingKubeconfigPath == "" {
 		return fmt.Errorf("KUBERT_SHELL_KUBECONFIG not set; cannot switch context in-place")
+	}
+
+	if n := sm.InPlaceSwitchWarnCount(); n < state.InPlaceSwitchWarnMax {
+		yellow := color.New(color.FgHiYellow).SprintFunc()
+		remaining := state.InPlaceSwitchWarnMax - n - 1
+		var timesNote string
+		switch remaining {
+		case 0:
+			timesNote = "(last time this warning is shown)"
+		case 1:
+			timesNote = "(this warning will be shown 1 more time)"
+		default:
+			timesNote = fmt.Sprintf("(this warning will be shown %d more times)", remaining)
+		}
+		fmt.Fprintf(o.ErrOut, "%s kubert context behavior has changed (v0.8.0+) - showing this warning because you switched contexts in an active kubert shell.\n",
+			yellow("Warning:"))
+		fmt.Fprintln(o.ErrOut)
+		fmt.Fprintln(o.ErrOut, "         Contexts are now updated in-place instead of spawning a new nested shell on every switch.")
+		fmt.Fprintln(o.ErrOut, "         This does not break isolation between shells, but kubert will now reuse the existing shell rather than nesting a new one.")
+		fmt.Fprintln(o.ErrOut)
+		fmt.Fprintln(o.ErrOut, "         You can safely ignore this if you don't rely on a new nested sub-shell being created on every context switch.")
+		fmt.Fprintln(o.ErrOut, "         Use --recursive or set 'recursive: true' in config to restore the previous behaviour.")
+		fmt.Fprintln(o.ErrOut)
+		fmt.Fprintln(o.ErrOut, "         See https://github.com/idebeijer/kubert/releases/tag/v0.8.0 for details.")
+		fmt.Fprintf(o.ErrOut, "         %s\n", timesNote)
+		if err := sm.RecordInPlaceSwitchWarn(); err != nil {
+			slog.Warn("Failed to record in-place switch warning count", "error", err)
+		}
 	}
 
 	contextInState, _ := sm.ContextInfo(contextName)
