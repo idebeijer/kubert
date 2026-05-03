@@ -7,7 +7,9 @@ import (
 )
 
 func TestInPlaceSwitchWarnCount(t *testing.T) {
+	orig := xdg.DataHome
 	xdg.DataHome = t.TempDir()
+	t.Cleanup(func() { xdg.DataHome = orig })
 
 	m, err := NewManager()
 	if err != nil {
@@ -29,7 +31,9 @@ func TestInPlaceSwitchWarnCount(t *testing.T) {
 }
 
 func TestInPlaceSwitchWarnCount_Persisted(t *testing.T) {
+	orig := xdg.DataHome
 	xdg.DataHome = t.TempDir()
+	t.Cleanup(func() { xdg.DataHome = orig })
 
 	m, err := NewManager()
 	if err != nil {

@@ -6,7 +6,9 @@ import (
 	"log/slog"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"sort"
+	"strings"
 
 	"github.com/fatih/color"
 	"github.com/spf13/cobra"
@@ -157,10 +159,29 @@ func (o *ContextOptions) Run() error {
 	return o.ShellLauncher(tempKubeconfig.Name(), selectedContext.FilePath, selectedContextName, o.Config)
 }
 
+func validateManagedKubeconfigPath(path string) error {
+	clean := filepath.Clean(path)
+	tmpDir := filepath.Clean(os.TempDir())
+	if !strings.HasPrefix(clean, tmpDir+string(filepath.Separator)) {
+		return fmt.Errorf("KUBERT_SHELL_KUBECONFIG %q is not inside the system temp directory, refusing to overwrite", path)
+	}
+	fi, err := os.Lstat(clean)
+	if err != nil {
+		return fmt.Errorf("cannot stat KUBERT_SHELL_KUBECONFIG: %w", err)
+	}
+	if !fi.Mode().IsRegular() {
+		return fmt.Errorf("KUBERT_SHELL_KUBECONFIG %q is not a regular file, refusing to overwrite", path)
+	}
+	return nil
+}
+
 func (o *ContextOptions) switchContextInPlace(sm *state.Manager, contextName string, ctx kubeconfig.Context) error {
 	existingKubeconfigPath := os.Getenv(kubert.ShellKubeconfigEnvVar)
 	if existingKubeconfigPath == "" {
 		return fmt.Errorf("KUBERT_SHELL_KUBECONFIG not set; cannot switch context in-place")
+	}
+	if err := validateManagedKubeconfigPath(existingKubeconfigPath); err != nil {
+		return err
 	}
 
 	if n := sm.InPlaceSwitchWarnCount(); n < state.InPlaceSwitchWarnMax {

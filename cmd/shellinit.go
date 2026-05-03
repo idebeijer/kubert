@@ -28,10 +28,12 @@ export KUBERT_SHELL_INIT_SHELL=bash
 kubert() {
   command kubert "$@"
   local _ec=$?
-  local _f="/tmp/kubert-env-$$"
+  local _d="${XDG_RUNTIME_DIR:-/tmp}"
+  local _f="${_d}/kubert-env-$$"
   if [[ -f "$_f" ]]; then
     # shellcheck source=/dev/null
-    source "$_f" && rm -f "$_f"
+    source "$_f"
+    rm -f "$_f"
   fi
   return $_ec
 }
@@ -48,9 +50,11 @@ export KUBERT_SHELL_INIT_SHELL=zsh
 kubert() {
   command kubert "$@"
   local _ec=$?
-  local _f="/tmp/kubert-env-$$"
+  local _d="${XDG_RUNTIME_DIR:-/tmp}"
+  local _f="${_d}/kubert-env-$$"
   if [[ -f "$_f" ]]; then
-    source "$_f" && rm -f "$_f"
+    source "$_f"
+    rm -f "$_f"
   fi
   return $_ec
 }
@@ -67,9 +71,12 @@ set -gx KUBERT_SHELL_INIT_SHELL fish
 function kubert
   command kubert $argv
   set _ec $status
-  set _f /tmp/kubert-env-$fish_pid
+  set _d "$XDG_RUNTIME_DIR"
+  test -z "$_d"; and set _d /tmp
+  set _f "$_d/kubert-env-$fish_pid"
   if test -f $_f
-    source $_f && rm -f $_f
+    source $_f
+    rm -f $_f
   end
   return $_ec
 end
@@ -128,17 +135,23 @@ func validateShell(name string) (string, error) {
 
 // envUpdateFilePath returns the path of the env-update file that the shell
 // function will source after an in-place context switch.
-// Uses /tmp directly so the path is identical whether computed by the Go binary
-// or by the shell function's $$ variable.
+// Uses XDG_RUNTIME_DIR when set (user-owned, 0700) so the path is not
+// predictable by other users; falls back to os.TempDir().
 func envUpdateFilePath(shellPID int) string {
-	return fmt.Sprintf("/tmp/kubert-env-%d", shellPID)
+	dir := os.Getenv("XDG_RUNTIME_DIR")
+	if dir == "" {
+		dir = os.TempDir()
+	}
+	return filepath.Join(dir, fmt.Sprintf("kubert-env-%d", shellPID))
 }
 
 // writeEnvUpdateFile writes updated KUBERT_SHELL_* vars to a file that the
-// shell function sources after kubert returns.
+// shell function sources after kubert returns. The write is atomic (temp file
+// + rename) to avoid partial reads by the shell.
 func writeEnvUpdateFile(contextName, originalKubeconfigPath string) error {
 	shell := os.Getenv(kubert.ShellInitShellEnvVar)
 	path := envUpdateFilePath(os.Getppid())
+	dir := filepath.Dir(path)
 
 	var sb strings.Builder
 	if shell == shellFish {
@@ -149,7 +162,26 @@ func writeEnvUpdateFile(contextName, originalKubeconfigPath string) error {
 		fmt.Fprintf(&sb, "export %s=%s\n", kubert.ShellOriginalKubeconfigEnvVar, shellSingleQuote(originalKubeconfigPath))
 	}
 
-	return os.WriteFile(path, []byte(sb.String()), 0o600)
+	tmp, err := os.CreateTemp(dir, "kubert-env-tmp-*")
+	if err != nil {
+		return fmt.Errorf("failed to create env update file: %w", err)
+	}
+	tmpName := tmp.Name()
+	if err := tmp.Chmod(0o600); err != nil {
+		_ = tmp.Close()
+		_ = os.Remove(tmpName)
+		return err
+	}
+	if _, err := tmp.WriteString(sb.String()); err != nil {
+		_ = tmp.Close()
+		_ = os.Remove(tmpName)
+		return fmt.Errorf("failed to write env update file: %w", err)
+	}
+	if err := tmp.Close(); err != nil {
+		_ = os.Remove(tmpName)
+		return fmt.Errorf("failed to close env update file: %w", err)
+	}
+	return os.Rename(tmpName, path)
 }
 
 // shellSingleQuote wraps s in single quotes, safe for bash and zsh.

@@ -203,7 +203,7 @@ This can also be overridden via environment variable: `KUBERT_FZF_OPTS`.
 
 ### Shell Hooks
 
-Hooks let you run shell commands before and after kubert spawns the subshell (and on every in-place context switch). They execute in the parent shell, so you can adjust prompts, send notifications, or log actions.
+Hooks let you run shell commands before and after kubert spawns the subshell (and on every in-place context switch). They run in a child shell process attached to the same TTY, so terminal-side effects like updating the tab title, sending notifications, or logging actions work, but environment changes such as `export` or prompt-variable updates do not persist in the caller's shell.
 
 Name shell tab after selected Kubernetes context:
 
