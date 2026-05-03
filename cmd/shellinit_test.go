@@ -3,6 +3,7 @@ package cmd
 import (
 	"bytes"
 	"os"
+	"os/exec"
 	"strings"
 	"testing"
 )
@@ -121,6 +122,30 @@ func TestShellSingleQuote(t *testing.T) {
 		if got := shellSingleQuote(c.in); got != c.want {
 			t.Errorf("shellSingleQuote(%q) = %q, want %q", c.in, got, c.want)
 		}
+	}
+}
+
+func TestShellInitScript_Syntax(t *testing.T) {
+	tests := []struct {
+		shell  string
+		script string
+		args   []string
+	}{
+		{shellBash, bashInitScript, []string{"bash", "-n", "/dev/stdin"}},
+		{shellZsh, zshInitScript, []string{"zsh", "-n", "/dev/stdin"}},
+		{shellFish, fishInitScript, []string{"fish", "--no-execute", "/dev/stdin"}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.shell, func(t *testing.T) {
+			if _, err := exec.LookPath(tt.args[0]); err != nil {
+				t.Skipf("%s not available", tt.args[0])
+			}
+			cmd := exec.Command(tt.args[0], tt.args[1:]...)
+			cmd.Stdin = strings.NewReader(tt.script)
+			if out, err := cmd.CombinedOutput(); err != nil {
+				t.Errorf("%s syntax check failed: %v\n%s", tt.shell, err, out)
+			}
+		})
 	}
 }
 
