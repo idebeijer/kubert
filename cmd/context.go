@@ -363,10 +363,11 @@ func writeContextToExistingFile(kubeconfigPath, selectedContextName, namespace, 
 	tmpName := tmp.Name()
 	_ = tmp.Close()
 	if err := clientcmd.WriteToFile(*newConfig, tmpName); err != nil {
+		// #nosec G703 -- tmpName is created by os.CreateTemp, not user input
 		_ = os.Remove(tmpName)
 		return fmt.Errorf("failed to write kubeconfig: %w", err)
 	}
-	if err := os.Rename(tmpName, targetPath); err != nil {
+	if err := os.Rename(tmpName, targetPath); err != nil { // #nosec G703 -- tmpName is created by os.CreateTemp, not user input
 		_ = os.Remove(tmpName)
 		return fmt.Errorf("failed to replace kubeconfig: %w", err)
 	}
