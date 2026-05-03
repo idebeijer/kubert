@@ -179,6 +179,13 @@ func (o *ContextOptions) switchContextInPlace(sm *state.Manager, contextName str
 		slog.Warn("Failed to save last context", "error", err)
 	}
 
+	// Write env-update file so the shell function can source the new values.
+	if os.Getenv(kubert.ShellInitEnvVar) == "1" {
+		if err := writeEnvUpdateFile(contextName, ctx.FilePath); err != nil {
+			slog.Warn("Failed to write env update file", "error", err)
+		}
+	}
+
 	// Fire pre-context hook after switching (signals entering the new context).
 	// Inject the new context name so the hook sees the correct value even though
 	// KUBERT_SHELL_CONTEXT in the running shell cannot be updated from a child process.
@@ -335,7 +342,12 @@ func launchShellWithKubeconfig(kubeconfigPath, originalKubeconfigPath, contextNa
 	env = append(env, kubert.ShellActiveEnvVar+"=1")
 	env = append(env, kubert.ShellKubeconfigEnvVar+"="+kubeconfigPath)
 	env = append(env, kubert.ShellOriginalKubeconfigEnvVar+"="+originalKubeconfigPath)
-	env = append(env, kubert.ShellContextEnvVar+"="+contextName)
+	// Only set KUBERT_SHELL_CONTEXT when the shell function is active. Without it
+	// there is no mechanism to update the var after in-place switches, so a stale
+	// value is worse than no value.
+	if os.Getenv(kubert.ShellInitEnvVar) == "1" {
+		env = append(env, kubert.ShellContextEnvVar+"="+contextName)
+	}
 
 	statefile, _ := state.FilePath()
 	env = append(env, kubert.ShellStateFilePathEnvVar+"="+statefile)

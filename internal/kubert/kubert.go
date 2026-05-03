@@ -20,7 +20,17 @@ const (
 	ShellOriginalKubeconfigEnvVar = "KUBERT_SHELL_ORIGINAL_KUBECONFIG"
 
 	// ShellContextEnvVar is the environment variable that is set to the context name.
+	// Only set when ShellInitEnvVar is present; without the shell function there is no
+	// mechanism to keep it updated after in-place switches.
 	ShellContextEnvVar = "KUBERT_SHELL_CONTEXT"
+
+	// ShellInitEnvVar is exported by the kubert shell function (see "kubert shell-init").
+	// Its presence tells the binary that env-var updates can be delivered via an env-update file.
+	ShellInitEnvVar = "KUBERT_SHELL_INIT"
+
+	// ShellInitShellEnvVar holds the name of the shell the function was loaded in (bash/zsh/fish).
+	// Used to write the env-update file in the correct syntax.
+	ShellInitShellEnvVar = "KUBERT_SHELL_INIT_SHELL"
 )
 
 // ShellPreFlightCheck checks if the shell was started by Kubert and if the kubeconfig file is the same as the one set by Kubert.

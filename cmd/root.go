@@ -69,6 +69,7 @@ func (c *RootCmd) addCommands() {
 	c.AddCommand(NewExecCommand())
 	c.AddCommand(which.NewCommand())
 	c.AddCommand(NewVersionCommand())
+	c.AddCommand(NewShellInitCommand())
 }
 
 func (c *RootCmd) initConfig() {
