@@ -217,7 +217,10 @@ func (o *ContextOptions) switchContextInPlace(sm *state.Manager, contextName str
 
 	// Fire post-context hook before switching (signals leaving the old context).
 	if o.Config.Hooks.PostShell != "" {
-		if err := executeHook(o.Config.Hooks.PostShell, "post-context"); err != nil {
+		if err := executeHook(o.Config.Hooks.PostShell, "post-context",
+			kubert.ShellContextEnvVar+"="+os.Getenv(kubert.ShellContextEnvVar),
+			kubert.ShellOriginalKubeconfigEnvVar+"="+os.Getenv(kubert.ShellOriginalKubeconfigEnvVar),
+		); err != nil {
 			slog.Warn("Failed to execute post-context hook", "error", err)
 		}
 	}
@@ -241,7 +244,10 @@ func (o *ContextOptions) switchContextInPlace(sm *state.Manager, contextName str
 	// Inject the new context name so the hook sees the correct value even though
 	// KUBERT_SHELL_CONTEXT in the running shell cannot be updated from a child process.
 	if o.Config.Hooks.PreShell != "" {
-		if err := executeHook(o.Config.Hooks.PreShell, "pre-context", kubert.ShellContextEnvVar+"="+contextName); err != nil {
+		if err := executeHook(o.Config.Hooks.PreShell, "pre-context",
+			kubert.ShellContextEnvVar+"="+contextName,
+			kubert.ShellOriginalKubeconfigEnvVar+"="+ctx.FilePath,
+		); err != nil {
 			slog.Warn("Failed to execute pre-context hook", "error", err)
 		}
 	}
@@ -423,7 +429,10 @@ func launchShellWithKubeconfig(kubeconfigPath, originalKubeconfigPath, contextNa
 
 	// Execute pre-shell hook if configured
 	if cfg.Hooks.PreShell != "" {
-		if err := executeHook(cfg.Hooks.PreShell, "pre-shell"); err != nil {
+		if err := executeHook(cfg.Hooks.PreShell, "pre-shell",
+			kubert.ShellContextEnvVar+"="+contextName,
+			kubert.ShellOriginalKubeconfigEnvVar+"="+originalKubeconfigPath,
+		); err != nil {
 			slog.Warn("Failed to execute pre-shell hook", "error", err)
 		}
 	}
@@ -439,7 +448,10 @@ func launchShellWithKubeconfig(kubeconfigPath, originalKubeconfigPath, contextNa
 
 	// Execute post-shell hook if configured (always run, even if shell exited with error)
 	if cfg.Hooks.PostShell != "" {
-		if err := executeHook(cfg.Hooks.PostShell, "post-shell"); err != nil {
+		if err := executeHook(cfg.Hooks.PostShell, "post-shell",
+			kubert.ShellContextEnvVar+"="+contextName,
+			kubert.ShellOriginalKubeconfigEnvVar+"="+originalKubeconfigPath,
+		); err != nil {
 			slog.Warn("Failed to execute post-shell hook", "error", err)
 		}
 	}
