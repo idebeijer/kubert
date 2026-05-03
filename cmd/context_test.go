@@ -843,9 +843,6 @@ func TestContextOptions_Run_InPlaceSwitch(t *testing.T) {
 	if shellLauncherCalled {
 		t.Error("ShellLauncher should not have been called for in-place switch")
 	}
-	if !strings.Contains(buf.String(), "ctx-b") {
-		t.Errorf("Expected output to mention ctx-b, got: %q", buf.String())
-	}
 }
 
 func TestContextOptions_Run_InPlaceSwitch_Nested(t *testing.T) {

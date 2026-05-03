@@ -252,7 +252,6 @@ func (o *ContextOptions) switchContextInPlace(sm *state.Manager, contextName str
 		}
 	}
 
-	fmt.Fprintf(o.Out, "Switched to context %q\n", contextName)
 	return nil
 }
 
