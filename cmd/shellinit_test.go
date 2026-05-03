@@ -124,6 +124,28 @@ func TestShellSingleQuote(t *testing.T) {
 	}
 }
 
+func TestEnvUpdateFilePath_TMPDIRFallback(t *testing.T) {
+	t.Setenv("XDG_RUNTIME_DIR", "")
+	t.Setenv("TMPDIR", "/custom/tmp")
+
+	got := envUpdateFilePath(1234)
+	want := "/custom/tmp/kubert-env-1234"
+	if got != want {
+		t.Errorf("envUpdateFilePath with TMPDIR set: got %q, want %q", got, want)
+	}
+}
+
+func TestEnvUpdateFilePath_DefaultFallback(t *testing.T) {
+	t.Setenv("XDG_RUNTIME_DIR", "")
+	t.Setenv("TMPDIR", "")
+
+	got := envUpdateFilePath(1234)
+	want := "/tmp/kubert-env-1234"
+	if got != want {
+		t.Errorf("envUpdateFilePath with no env vars: got %q, want %q", got, want)
+	}
+}
+
 func assertContains(t *testing.T, haystack, needle string) {
 	t.Helper()
 	if !strings.Contains(haystack, needle) {

@@ -1003,3 +1003,159 @@ func TestContextOptions_Run_InPlaceSwitch_MissingKubeconfigEnvVar(t *testing.T) 
 		t.Errorf("Unexpected error message: %v", err)
 	}
 }
+
+func TestValidateManagedKubeconfigPath(t *testing.T) {
+	t.Run("rejects path outside temp dir", func(t *testing.T) {
+		err := validateManagedKubeconfigPath("/etc/kubeconfig.yaml")
+		if err == nil {
+			t.Fatal("expected error for path outside temp dir, got nil")
+		}
+	})
+
+	t.Run("rejects symlink", func(t *testing.T) {
+		target, err := os.CreateTemp("", "kubert-target-*.yaml")
+		if err != nil {
+			t.Fatalf("CreateTemp: %v", err)
+		}
+		defer func() {
+			_ = target.Close()
+			_ = os.Remove(target.Name())
+		}()
+
+		link := filepath.Join(os.TempDir(), "kubert-test-link-"+filepath.Base(target.Name()))
+		if err := os.Symlink(target.Name(), link); err != nil {
+			t.Fatalf("Symlink: %v", err)
+		}
+		defer func() { _ = os.Remove(link) }()
+
+		if err := validateManagedKubeconfigPath(link); err == nil {
+			t.Fatal("expected error for symlink, got nil")
+		}
+	})
+
+	t.Run("accepts regular file in temp dir", func(t *testing.T) {
+		f, err := os.CreateTemp("", "kubert-valid-*.yaml")
+		if err != nil {
+			t.Fatalf("CreateTemp: %v", err)
+		}
+		defer func() {
+			_ = f.Close()
+			_ = os.Remove(f.Name())
+		}()
+
+		if err := validateManagedKubeconfigPath(f.Name()); err != nil {
+			t.Errorf("unexpected error for valid temp file: %v", err)
+		}
+	})
+}
+
+func TestContextOptions_Complete_MergesConfigNested(t *testing.T) {
+	orig := config.Cfg.Nested
+	config.Cfg.Nested = true
+	t.Cleanup(func() { config.Cfg.Nested = orig })
+
+	o := NewContextOptions()
+	cmd := NewContextCommand()
+	if err := o.Complete(cmd, []string{}); err != nil {
+		t.Fatalf("Complete: %v", err)
+	}
+	if !o.Nested {
+		t.Error("Expected o.Nested to be true when Config.Nested is true")
+	}
+}
+
+func TestContextOptions_Run_RestoresLastNamespace_InPlace(t *testing.T) {
+	setupTestXDGDataHome(t)
+	sm, err := state.NewManager()
+	if err != nil {
+		t.Fatalf("NewManager: %v", err)
+	}
+	if err := sm.SetLastNamespaceWithContextCreation("ctx-b", "my-namespace"); err != nil {
+		t.Fatalf("SetLastNamespaceWithContextCreation: %v", err)
+	}
+
+	existingKubeconfig, err := os.CreateTemp("", "kubert-existing-*.yaml")
+	if err != nil {
+		t.Fatalf("Failed to create temp file: %v", err)
+	}
+	defer func() {
+		_ = existingKubeconfig.Close()
+		_ = os.Remove(existingKubeconfig.Name())
+	}()
+
+	t.Setenv(kubert.ShellActiveEnvVar, "1")
+	t.Setenv(kubert.ShellKubeconfigEnvVar, existingKubeconfig.Name())
+
+	var gotNamespace string
+	o := &ContextOptions{
+		Out:    &bytes.Buffer{},
+		ErrOut: &bytes.Buffer{},
+		Args:   []string{"ctx-b"},
+		Config: config.Config{},
+		ContextLoader: func() ([]kubeconfig.Context, error) {
+			return []kubeconfig.Context{
+				{Name: "ctx-b", WithPath: kubeconfig.WithPath{FilePath: "/tmp/config"}},
+			}, nil
+		},
+		StateManager:  func() (*state.Manager, error) { return sm, nil },
+		IsInteractive: func() bool { return false },
+		ShellLauncher: func(_, _, _ string, _ config.Config) error { return nil },
+		TempFileWriter: func(_, _, _ string) (*os.File, func(), error) {
+			return nil, func() {}, nil
+		},
+		InPlaceWriter: func(_, _, namespace, _ string) error {
+			gotNamespace = namespace
+			return nil
+		},
+	}
+
+	if err := o.Run(); err != nil {
+		t.Fatalf("Run() returned unexpected error: %v", err)
+	}
+	if gotNamespace != "my-namespace" {
+		t.Errorf("InPlaceWriter received namespace %q, want %q", gotNamespace, "my-namespace")
+	}
+}
+
+func TestContextOptions_Run_RestoresLastNamespace_Nested(t *testing.T) {
+	setupTestXDGDataHome(t)
+	sm, err := state.NewManager()
+	if err != nil {
+		t.Fatalf("NewManager: %v", err)
+	}
+	if err := sm.SetLastNamespaceWithContextCreation("ctx-b", "my-namespace"); err != nil {
+		t.Fatalf("SetLastNamespaceWithContextCreation: %v", err)
+	}
+
+	var gotNamespace string
+	o := &ContextOptions{
+		Out:    &bytes.Buffer{},
+		ErrOut: &bytes.Buffer{},
+		Args:   []string{"ctx-b"},
+		Config: config.Config{},
+		ContextLoader: func() ([]kubeconfig.Context, error) {
+			return []kubeconfig.Context{
+				{Name: "ctx-b", WithPath: kubeconfig.WithPath{FilePath: "/tmp/config"}},
+			}, nil
+		},
+		StateManager:  func() (*state.Manager, error) { return sm, nil },
+		IsInteractive: func() bool { return false },
+		ShellLauncher: func(_, _, _ string, _ config.Config) error { return nil },
+		TempFileWriter: func(_, _, namespace string) (*os.File, func(), error) {
+			gotNamespace = namespace
+			f, err := os.CreateTemp("", "test-*.yaml")
+			if err != nil {
+				return nil, nil, err
+			}
+			return f, func() { _ = os.Remove(f.Name()) }, nil
+		},
+		InPlaceWriter: func(_, _, _, _ string) error { return nil },
+	}
+
+	if err := o.Run(); err != nil {
+		t.Fatalf("Run() returned unexpected error: %v", err)
+	}
+	if gotNamespace != "my-namespace" {
+		t.Errorf("TempFileWriter received namespace %q, want %q", gotNamespace, "my-namespace")
+	}
+}
