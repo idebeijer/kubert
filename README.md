@@ -97,16 +97,16 @@ kubert ctx -             # jump back to the previously used context
 # Switch namespaces inside the current kubert shell
 kubert ns kube-system
 
-# Wrap kubectl to enforce context protection rules
-kubert kubectl get pods
-
 # Run a command across several contexts (glob, regex, or interactive multi-select)
 kubert exec "prod-*" "staging-?" -- kubectl get nodes
 kubert exec --regex "^(dev|qa)-.*" -- kubectl get pods
 kubert exec --parallel --dry-run "prod-*" -- kubectl rollout status
 
-# Open the used config file in vim
+# Open the used kubert config file, editor is determined by $EDITOR or $VISUAL, falls back to 'vim'
 kubert config edit
+
+# Wrap kubectl to enforce context protection rules
+kubert kubectl get pods
 
 # Manage context protection (optional, no protection by default)
 kubert protection info      # show current protection status
@@ -147,7 +147,7 @@ kubeconfigs:
 # If `fzf` is not found, kubert falls back to a non-interactive list.
 interactive: true
 
-# Context switch mode when already inside a kubert shell:
+# Context switch mode when already inside a kubert shell (i.e., when KUBERT_SHELL_ACTIVE=1):
 # - false (default): switch context in-place, stay in the same shell
 # - true: spawn a new nested sub-shell with the new context (nested mode)
 nested: false
@@ -169,8 +169,8 @@ protection:
   prompt: true # ask for confirmation (false = exit immediately)
 
 hooks:
-  preShell: "" # run before spawning shell
-  postShell: "" # run after exiting shell
+  preShell: "" # run before spawning shell or switching context in-place
+  postShell: "" # run after exiting shell or switching to another context in-place
 
 fzf:
   opts: "" # additional fzf options
@@ -209,8 +209,8 @@ Name shell tab after selected Kubernetes context:
 
 ```yaml
 hooks:
-  preShell: 'echo "\033]0;k8s: $KUBERT_SHELL_CONTEXT\007"'
-  postShell: 'echo "\033]0;\007"'
+  preShell: 'printf "\033]0;k8s: $KUBERT_SHELL_CONTEXT\007"'
+  postShell: 'printf "\033]0;\007"'
 ```
 
 > **Note:** `$KUBERT_SHELL_CONTEXT` in hooks is only available and reliable when shell-init is configured. See [Shell Init](#shell-init-optional) below.

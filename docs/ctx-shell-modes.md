@@ -1,12 +1,12 @@
 # Context switching modes
 
-`kubert ctx` has two modes depending on whether it is invoked from inside an
+`kubert ctx` has two modes depending on config and whether it is invoked from inside an
 existing kubert shell or from a plain terminal.
 
 ## Default mode — in-place switch
 
 When `KUBERT_SHELL_ACTIVE=1` is set (i.e. you are already inside a kubert
-shell), kubert rewrites the existing temporary kubeconfig in-place instead of
+shell, started with `kubert ctx`), kubert rewrites the existing temporary kubeconfig in-place instead of
 spawning a new shell. `KUBECONFIG` keeps pointing at the same path so kubectl
 picks up the new context immediately, and `$SHLVL` never increases.
 
@@ -82,14 +82,14 @@ sequenceDiagram
 
 ## Env vars set at shell spawn
 
-| Variable                           | Value                      | Set without shell-init? | Updated on in-place switch?              |
-| ---------------------------------- | -------------------------- | ----------------------- | ---------------------------------------- |
-| `KUBECONFIG`                       | path to temp kubeconfig    | yes                     | yes — file is overwritten in-place       |
-| `KUBERT_SHELL_ACTIVE`              | `1`                        | yes                     | n/a                                      |
-| `KUBERT_SHELL_KUBECONFIG`          | path to temp kubeconfig    | yes                     | no — same file throughout                |
-| `KUBERT_SHELL_CONTEXT`             | context name               | no — requires shell-init | yes — via env-update file (shell-init only) |
-| `KUBERT_SHELL_ORIGINAL_KUBECONFIG` | original kubeconfig path   | no — requires shell-init | no                                       |
-| `KUBERT_SHELL_STATE_FILE`          | path to state file         | yes                     | no                                       |
+| Variable                           | Value                    | Set without shell-init?  | Updated on in-place switch?                 |
+| ---------------------------------- | ------------------------ | ------------------------ | ------------------------------------------- |
+| `KUBECONFIG`                       | path to temp kubeconfig  | yes                      | yes — file is overwritten in-place          |
+| `KUBERT_SHELL_ACTIVE`              | `1`                      | yes                      | n/a                                         |
+| `KUBERT_SHELL_KUBECONFIG`          | path to temp kubeconfig  | yes                      | no — same file throughout                   |
+| `KUBERT_SHELL_CONTEXT`             | context name             | no — requires shell-init | yes — via env-update file (shell-init only) |
+| `KUBERT_SHELL_ORIGINAL_KUBECONFIG` | original kubeconfig path | no — requires shell-init | no                                          |
+| `KUBERT_SHELL_STATE_FILE`          | path to state file       | yes                      | no                                          |
 
 ### Why some vars require shell-init
 
