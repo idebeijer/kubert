@@ -70,6 +70,16 @@ func NewManager() (*Manager, error) {
 		if err := json.Unmarshal(data, &manager.state); err != nil {
 			return nil, fmt.Errorf("failed to unmarshal state: %w", err)
 		}
+
+		// Prune stale fields left by older versions.
+		var raw map[string]json.RawMessage
+		if json.Unmarshal(data, &raw) == nil {
+			if _, found := raw["in_place_switch_warn_count"]; found {
+				if err := manager.saveState(); err != nil {
+					slog.Warn("failed to prune stale state fields", "error", err)
+				}
+			}
+		}
 	}
 
 	return manager, nil
