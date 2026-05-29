@@ -517,12 +517,10 @@ func TestManager_LiftContextProtection_NonExistingContext(t *testing.T) {
 }
 
 func TestNewManager_PrunesStaleInPlaceSwitchWarnCount(t *testing.T) {
-	tempDir, err := os.MkdirTemp("", "kubert_test")
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer func() { _ = os.RemoveAll(tempDir) }()
+	tempDir := t.TempDir()
+	orig := xdg.DataHome
 	xdg.DataHome = tempDir
+	t.Cleanup(func() { xdg.DataHome = orig })
 
 	// Write a state file that contains the stale field from v0.8.x.
 	stateDir := fmt.Sprintf("%s/kubert", tempDir)
@@ -534,8 +532,7 @@ func TestNewManager_PrunesStaleInPlaceSwitchWarnCount(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	_, err = NewManager()
-	if err != nil {
+	if _, err := NewManager(); err != nil {
 		t.Fatalf("NewManager: %v", err)
 	}
 
