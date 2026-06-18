@@ -1,6 +1,7 @@
 package state
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
@@ -512,6 +513,42 @@ func TestManager_LiftContextProtection_NonExistingContext(t *testing.T) {
 	var contextNotFoundError *ContextNotFoundError
 	if !errors.As(err, &contextNotFoundError) {
 		t.Errorf("Expected ContextNotFoundError, got %T", err)
+	}
+}
+
+func TestNewManager_PrunesStaleInPlaceSwitchWarnCount(t *testing.T) {
+	tempDir := t.TempDir()
+	orig := xdg.DataHome
+	xdg.DataHome = tempDir
+	t.Cleanup(func() { xdg.DataHome = orig })
+
+	// Write a state file that contains the stale field from v0.8.x.
+	stateDir := fmt.Sprintf("%s/kubert", tempDir)
+	if err := os.MkdirAll(stateDir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	stale := []byte(`{"contexts":{},"in_place_switch_warn_count":2}`)
+	if err := os.WriteFile(stateDir+"/state.json", stale, 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	if _, err := NewManager(); err != nil {
+		t.Fatalf("NewManager: %v", err)
+	}
+
+	data, err := os.ReadFile(stateDir + "/state.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(data) == string(stale) {
+		t.Error("state file was not rewritten to prune stale field")
+	}
+	var cleaned map[string]any
+	if err := json.Unmarshal(data, &cleaned); err != nil {
+		t.Fatalf("state file is not valid JSON after migration: %v", err)
+	}
+	if _, found := cleaned["in_place_switch_warn_count"]; found {
+		t.Error("stale field in_place_switch_warn_count was not removed from state file")
 	}
 }
 
