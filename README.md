@@ -6,7 +6,6 @@
 
 [![License](https://img.shields.io/github/license/idebeijer/kubert)](https://github.com/idebeijer/kubert/blob/main/LICENSE)
 [![Release](https://img.shields.io/github/v/release/idebeijer/kubert)](https://github.com/idebeijer/kubert/releases)
-[![Go Report Card](https://goreportcard.com/badge/github.com/idebeijer/kubert)](https://goreportcard.com/report/github.com/idebeijer/kubert)
 [![CI](https://img.shields.io/github/actions/workflow/status/idebeijer/kubert/build-test.yml?branch=main)](https://github.com/idebeijer/kubert/actions)
 [![Go Version](https://img.shields.io/github/go-mod/go-version/idebeijer/kubert)](https://go.dev/)
 
