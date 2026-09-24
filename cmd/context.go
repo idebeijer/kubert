@@ -165,7 +165,7 @@ func validateManagedKubeconfigPath(path string) error {
 	if !strings.HasPrefix(clean, tmpDir+string(filepath.Separator)) {
 		return fmt.Errorf("KUBERT_SHELL_KUBECONFIG %q is not inside the system temp directory, refusing to overwrite", path)
 	}
-	fi, err := os.Lstat(clean)
+	fi, err := os.Lstat(clean) //nolint:gosec // G703: path is validated above
 	if err != nil {
 		return fmt.Errorf("cannot stat KUBERT_SHELL_KUBECONFIG: %w", err)
 	}
@@ -217,7 +217,8 @@ func (o *ContextOptions) switchContextInPlace(sm *state.Manager, contextName str
 
 	// Fire post-context hook before switching (signals leaving the old context).
 	if o.Config.Hooks.PostShell != "" {
-		if err := executeHook(o.Config.Hooks.PostShell, "post-context",
+		if err := executeHook(
+			o.Config.Hooks.PostShell, "post-context",
 			kubert.ShellContextEnvVar+"="+os.Getenv(kubert.ShellContextEnvVar),
 			kubert.ShellOriginalKubeconfigEnvVar+"="+os.Getenv(kubert.ShellOriginalKubeconfigEnvVar),
 		); err != nil {
@@ -244,7 +245,8 @@ func (o *ContextOptions) switchContextInPlace(sm *state.Manager, contextName str
 	// Inject the new context name so the hook sees the correct value even though
 	// KUBERT_SHELL_CONTEXT in the running shell cannot be updated from a child process.
 	if o.Config.Hooks.PreShell != "" {
-		if err := executeHook(o.Config.Hooks.PreShell, "pre-context",
+		if err := executeHook(
+			o.Config.Hooks.PreShell, "pre-context",
 			kubert.ShellContextEnvVar+"="+contextName,
 			kubert.ShellOriginalKubeconfigEnvVar+"="+ctx.FilePath,
 		); err != nil {
@@ -428,7 +430,8 @@ func launchShellWithKubeconfig(kubeconfigPath, originalKubeconfigPath, contextNa
 
 	// Execute pre-shell hook if configured
 	if cfg.Hooks.PreShell != "" {
-		if err := executeHook(cfg.Hooks.PreShell, "pre-shell",
+		if err := executeHook(
+			cfg.Hooks.PreShell, "pre-shell",
 			kubert.ShellContextEnvVar+"="+contextName,
 			kubert.ShellOriginalKubeconfigEnvVar+"="+originalKubeconfigPath,
 		); err != nil {
@@ -447,7 +450,8 @@ func launchShellWithKubeconfig(kubeconfigPath, originalKubeconfigPath, contextNa
 
 	// Execute post-shell hook if configured (always run, even if shell exited with error)
 	if cfg.Hooks.PostShell != "" {
-		if err := executeHook(cfg.Hooks.PostShell, "post-shell",
+		if err := executeHook(
+			cfg.Hooks.PostShell, "post-shell",
 			kubert.ShellContextEnvVar+"="+contextName,
 			kubert.ShellOriginalKubeconfigEnvVar+"="+originalKubeconfigPath,
 		); err != nil {
