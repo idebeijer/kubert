@@ -10,7 +10,6 @@ import (
 
 	"github.com/spf13/cobra"
 	corev1 "k8s.io/api/core/v1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes/fake"
 	"k8s.io/client-go/tools/clientcmd"
 	"k8s.io/client-go/tools/clientcmd/api"
@@ -311,9 +310,9 @@ func TestSwitchNamespace_InvalidKubeconfig(t *testing.T) {
 func TestListNamespaces(t *testing.T) {
 	t.Run("returns namespace names", func(t *testing.T) {
 		clientset := fake.NewClientset(
-			&corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: "default"}},
-			&corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: "kube-system"}},
-			&corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: "production"}},
+			&corev1.Namespace{Name: "default"},
+			&corev1.Namespace{Name: "kube-system"},
+			&corev1.Namespace{Name: "production"},
 		)
 
 		names, err := listNamespaces(context.Background(), clientset)

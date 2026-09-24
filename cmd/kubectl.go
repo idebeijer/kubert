@@ -198,8 +198,7 @@ func isContextProtected(sm *state.Manager, context string, cfg config.Config) (b
 	explicitlyProtected, err := sm.IsContextProtected(context)
 	if err != nil {
 		// Context doesn't exist in state, check regex-based default
-		var contextNotFoundError *state.ContextNotFoundError
-		if !errors.As(err, &contextNotFoundError) {
+		if _, ok := errors.AsType[*state.ContextNotFoundError](err); !ok {
 			return false, err
 		}
 		// Fall through to regex check

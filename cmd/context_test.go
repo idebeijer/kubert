@@ -364,7 +364,7 @@ func TestContextOptions_Run_WithContextName(t *testing.T) {
 		Config: config.Config{},
 		ContextLoader: func() ([]kubeconfig.Context, error) {
 			return []kubeconfig.Context{
-				{Name: "test-cluster", WithPath: kubeconfig.WithPath{FilePath: "/tmp/config"}},
+				{Name: "test-cluster", FilePath: "/tmp/config"},
 			}, nil
 		},
 		StateManager: func() (*state.Manager, error) {
@@ -430,7 +430,7 @@ func TestContextOptions_Run_PreviousContext(t *testing.T) {
 		Config: config.Config{},
 		ContextLoader: func() ([]kubeconfig.Context, error) {
 			return []kubeconfig.Context{
-				{Name: "previous-cluster", WithPath: kubeconfig.WithPath{FilePath: "/tmp/config"}},
+				{Name: "previous-cluster", FilePath: "/tmp/config"},
 			}, nil
 		},
 		StateManager: func() (*state.Manager, error) {
@@ -480,7 +480,7 @@ func TestContextOptions_Run_NoPreviousContext(t *testing.T) {
 		Config: config.Config{},
 		ContextLoader: func() ([]kubeconfig.Context, error) {
 			return []kubeconfig.Context{
-				{Name: "test-cluster", WithPath: kubeconfig.WithPath{FilePath: "/tmp/config"}},
+				{Name: "test-cluster", FilePath: "/tmp/config"},
 			}, nil
 		},
 		StateManager: func() (*state.Manager, error) {
@@ -510,8 +510,8 @@ func TestContextOptions_Run_InteractiveSelection(t *testing.T) {
 		Config: config.Config{},
 		ContextLoader: func() ([]kubeconfig.Context, error) {
 			return []kubeconfig.Context{
-				{Name: "cluster-1", WithPath: kubeconfig.WithPath{FilePath: "/tmp/config"}},
-				{Name: "cluster-2", WithPath: kubeconfig.WithPath{FilePath: "/tmp/config"}},
+				{Name: "cluster-1", FilePath: "/tmp/config"},
+				{Name: "cluster-2", FilePath: "/tmp/config"},
 			}, nil
 		},
 		StateManager: func() (*state.Manager, error) {
@@ -563,8 +563,8 @@ func TestContextOptions_Run_NonInteractivePrintOnly(t *testing.T) {
 		Config: config.Config{},
 		ContextLoader: func() ([]kubeconfig.Context, error) {
 			return []kubeconfig.Context{
-				{Name: "cluster-1", WithPath: kubeconfig.WithPath{FilePath: "/tmp/config"}},
-				{Name: "cluster-2", WithPath: kubeconfig.WithPath{FilePath: "/tmp/config"}},
+				{Name: "cluster-1", FilePath: "/tmp/config"},
+				{Name: "cluster-2", FilePath: "/tmp/config"},
 			}, nil
 		},
 		StateManager: func() (*state.Manager, error) {
@@ -608,7 +608,7 @@ func TestContextOptions_Run_ContextNotFound(t *testing.T) {
 		Config: config.Config{},
 		ContextLoader: func() ([]kubeconfig.Context, error) {
 			return []kubeconfig.Context{
-				{Name: "cluster-1", WithPath: kubeconfig.WithPath{FilePath: "/tmp/config"}},
+				{Name: "cluster-1", FilePath: "/tmp/config"},
 			}, nil
 		},
 		StateManager: func() (*state.Manager, error) {
@@ -696,8 +696,8 @@ func TestGetContextNames(t *testing.T) {
 
 func TestFindContextByName(t *testing.T) {
 	contexts := []kubeconfig.Context{
-		{Name: "cluster-1", WithPath: kubeconfig.WithPath{FilePath: "/tmp/config1"}},
-		{Name: "cluster-2", WithPath: kubeconfig.WithPath{FilePath: "/tmp/config2"}},
+		{Name: "cluster-1", FilePath: "/tmp/config1"},
+		{Name: "cluster-2", FilePath: "/tmp/config2"},
 	}
 
 	t.Run("context found", func(t *testing.T) {
@@ -748,7 +748,7 @@ func TestContextOptions_Run_WarningSuppressedAfterMax(t *testing.T) {
 			Config: config.Config{},
 			ContextLoader: func() ([]kubeconfig.Context, error) {
 				return []kubeconfig.Context{
-					{Name: "ctx-b", WithPath: kubeconfig.WithPath{FilePath: "/tmp/config"}},
+					{Name: "ctx-b", FilePath: "/tmp/config"},
 				}, nil
 			},
 			StateManager:   func() (*state.Manager, error) { return sm, nil },
@@ -805,7 +805,7 @@ func TestContextOptions_Run_InPlaceSwitch(t *testing.T) {
 		Config: config.Config{},
 		ContextLoader: func() ([]kubeconfig.Context, error) {
 			return []kubeconfig.Context{
-				{Name: "ctx-b", WithPath: kubeconfig.WithPath{FilePath: "/tmp/config"}},
+				{Name: "ctx-b", FilePath: "/tmp/config"},
 			}, nil
 		},
 		StateManager: func() (*state.Manager, error) {
@@ -868,7 +868,7 @@ func TestContextOptions_Run_InPlaceSwitch_Nested(t *testing.T) {
 		Config: config.Config{},
 		ContextLoader: func() ([]kubeconfig.Context, error) {
 			return []kubeconfig.Context{
-				{Name: "ctx-b", WithPath: kubeconfig.WithPath{FilePath: "/tmp/config"}},
+				{Name: "ctx-b", FilePath: "/tmp/config"},
 			}, nil
 		},
 		StateManager: func() (*state.Manager, error) {
@@ -933,7 +933,7 @@ func TestContextOptions_Run_InPlaceSwitch_HooksFire(t *testing.T) {
 		},
 		ContextLoader: func() ([]kubeconfig.Context, error) {
 			return []kubeconfig.Context{
-				{Name: "ctx-b", WithPath: kubeconfig.WithPath{FilePath: "/tmp/config"}},
+				{Name: "ctx-b", FilePath: "/tmp/config"},
 			}, nil
 		},
 		StateManager: func() (*state.Manager, error) {
@@ -982,7 +982,7 @@ func TestContextOptions_Run_InPlaceSwitch_MissingKubeconfigEnvVar(t *testing.T) 
 		Config: config.Config{},
 		ContextLoader: func() ([]kubeconfig.Context, error) {
 			return []kubeconfig.Context{
-				{Name: "ctx-b", WithPath: kubeconfig.WithPath{FilePath: "/tmp/config"}},
+				{Name: "ctx-b", FilePath: "/tmp/config"},
 			}, nil
 		},
 		StateManager: func() (*state.Manager, error) {
@@ -1091,7 +1091,7 @@ func TestContextOptions_Run_RestoresLastNamespace_InPlace(t *testing.T) {
 		Config: config.Config{},
 		ContextLoader: func() ([]kubeconfig.Context, error) {
 			return []kubeconfig.Context{
-				{Name: "ctx-b", WithPath: kubeconfig.WithPath{FilePath: "/tmp/config"}},
+				{Name: "ctx-b", FilePath: "/tmp/config"},
 			}, nil
 		},
 		StateManager:  func() (*state.Manager, error) { return sm, nil },
@@ -1132,7 +1132,7 @@ func TestContextOptions_Run_RestoresLastNamespace_Nested(t *testing.T) {
 		Config: config.Config{},
 		ContextLoader: func() ([]kubeconfig.Context, error) {
 			return []kubeconfig.Context{
-				{Name: "ctx-b", WithPath: kubeconfig.WithPath{FilePath: "/tmp/config"}},
+				{Name: "ctx-b", FilePath: "/tmp/config"},
 			}, nil
 		},
 		StateManager:  func() (*state.Manager, error) { return sm, nil },

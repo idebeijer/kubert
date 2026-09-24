@@ -214,8 +214,7 @@ func TestManager_ContextProtection(t *testing.T) {
 	if err == nil {
 		t.Errorf("IsContextProtected() should return error for non-existing context")
 	}
-	var contextNotFoundError *ContextNotFoundError
-	if !errors.As(err, &contextNotFoundError) {
+	if _, ok := errors.AsType[*ContextNotFoundError](err); !ok {
 		t.Errorf("IsContextProtected() should return ContextNotFoundError, got %T", err)
 	}
 }
@@ -231,8 +230,7 @@ func TestManager_SetLastNamespace(t *testing.T) {
 	if err == nil {
 		t.Errorf("SetLastNamespace() should return error for non-existing context")
 	}
-	var contextNotFoundError *ContextNotFoundError
-	if !errors.As(err, &contextNotFoundError) {
+	if _, ok := errors.AsType[*ContextNotFoundError](err); !ok {
 		t.Errorf("SetLastNamespace() should return ContextNotFoundError, got %T", err)
 	}
 
@@ -361,8 +359,7 @@ func TestManager_ErrorHandling(t *testing.T) {
 				t.Errorf("%s should fail for non-existing context", tt.name)
 			}
 
-			var contextNotFoundError *ContextNotFoundError
-			if !errors.As(err, &contextNotFoundError) {
+			if _, ok := errors.AsType[*ContextNotFoundError](err); !ok {
 				t.Errorf("Expected ContextNotFoundError, got %T", err)
 			}
 		})
@@ -509,8 +506,7 @@ func TestManager_LiftContextProtection_NonExistingContext(t *testing.T) {
 		t.Error("LiftContextProtection should fail for non-existing context")
 	}
 
-	var contextNotFoundError *ContextNotFoundError
-	if !errors.As(err, &contextNotFoundError) {
+	if _, ok := errors.AsType[*ContextNotFoundError](err); !ok {
 		t.Errorf("Expected ContextNotFoundError, got %T", err)
 	}
 }
@@ -524,8 +520,7 @@ func TestManager_ClearProtectedUntil_NonExistingContext(t *testing.T) {
 		t.Error("ClearProtectedUntil should fail for non-existing context")
 	}
 
-	var contextNotFoundError *ContextNotFoundError
-	if !errors.As(err, &contextNotFoundError) {
+	if _, ok := errors.AsType[*ContextNotFoundError](err); !ok {
 		t.Errorf("Expected ContextNotFoundError, got %T", err)
 	}
 }

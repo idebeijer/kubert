@@ -81,10 +81,10 @@ func TestGlobToRegex(t *testing.T) {
 
 func TestFilterContextsByPattern(t *testing.T) {
 	contexts := []kubeconfig.Context{
-		{Name: "prod-east", WithPath: kubeconfig.WithPath{FilePath: "/tmp/config1"}},
-		{Name: "prod-west", WithPath: kubeconfig.WithPath{FilePath: "/tmp/config1"}},
-		{Name: "staging-east", WithPath: kubeconfig.WithPath{FilePath: "/tmp/config2"}},
-		{Name: "dev-local", WithPath: kubeconfig.WithPath{FilePath: "/tmp/config3"}},
+		{Name: "prod-east", FilePath: "/tmp/config1"},
+		{Name: "prod-west", FilePath: "/tmp/config1"},
+		{Name: "staging-east", FilePath: "/tmp/config2"},
+		{Name: "dev-local", FilePath: "/tmp/config3"},
 	}
 
 	tests := []struct {
@@ -156,12 +156,12 @@ func TestFilterContextsByPattern(t *testing.T) {
 
 func TestFilterContextsByPatterns(t *testing.T) {
 	contexts := []kubeconfig.Context{
-		{Name: "prod-east", WithPath: kubeconfig.WithPath{FilePath: "/tmp/config1"}},
-		{Name: "prod-west", WithPath: kubeconfig.WithPath{FilePath: "/tmp/config1"}},
-		{Name: "staging-east", WithPath: kubeconfig.WithPath{FilePath: "/tmp/config2"}},
-		{Name: "staging-west", WithPath: kubeconfig.WithPath{FilePath: "/tmp/config2"}},
-		{Name: "dev-local", WithPath: kubeconfig.WithPath{FilePath: "/tmp/config3"}},
-		{Name: "test-cluster", WithPath: kubeconfig.WithPath{FilePath: "/tmp/config4"}},
+		{Name: "prod-east", FilePath: "/tmp/config1"},
+		{Name: "prod-west", FilePath: "/tmp/config1"},
+		{Name: "staging-east", FilePath: "/tmp/config2"},
+		{Name: "staging-west", FilePath: "/tmp/config2"},
+		{Name: "dev-local", FilePath: "/tmp/config3"},
+		{Name: "test-cluster", FilePath: "/tmp/config4"},
 	}
 
 	tests := []struct {
@@ -253,11 +253,9 @@ func TestExecuteInContextKubeconfigSetup(t *testing.T) {
 
 	contexts := []kubeconfig.Context{
 		{
-			Name: "test-context",
-			WithPath: kubeconfig.WithPath{
-				Config:   cfg,
-				FilePath: kubeconfigPath,
-			},
+			Name:     "test-context",
+			Config:   cfg,
+			FilePath: kubeconfigPath,
 		},
 	}
 
@@ -298,11 +296,9 @@ func TestExecuteInContextWithNamespace(t *testing.T) {
 
 	contexts := []kubeconfig.Context{
 		{
-			Name: "test-context",
-			WithPath: kubeconfig.WithPath{
-				Config:   cfg,
-				FilePath: kubeconfigPath,
-			},
+			Name:     "test-context",
+			Config:   cfg,
+			FilePath: kubeconfigPath,
 		},
 	}
 
@@ -337,11 +333,9 @@ func TestExecuteParallelIsolation(t *testing.T) {
 		cfg := createTestKubeconfig(t, kubeconfigPath, contextName, "cluster-"+contextName, "user-"+contextName)
 
 		contexts = append(contexts, kubeconfig.Context{
-			Name: contextName,
-			WithPath: kubeconfig.WithPath{
-				Config:   cfg,
-				FilePath: kubeconfigPath,
-			},
+			Name:     contextName,
+			Config:   cfg,
+			FilePath: kubeconfigPath,
 		})
 	}
 
@@ -670,8 +664,8 @@ func TestExecOptions_Run_DryRun(t *testing.T) {
 		CommandArgs: []string{"kubectl", "get", "pods"},
 		ContextLoader: func() ([]kubeconfig.Context, error) {
 			return []kubeconfig.Context{
-				{Name: "test-cluster-1", WithPath: kubeconfig.WithPath{FilePath: "/tmp/config"}},
-				{Name: "test-cluster-2", WithPath: kubeconfig.WithPath{FilePath: "/tmp/config"}},
+				{Name: "test-cluster-1", FilePath: "/tmp/config"},
+				{Name: "test-cluster-2", FilePath: "/tmp/config"},
 			}, nil
 		},
 		StateManager: func() (*state.Manager, error) {
@@ -713,7 +707,7 @@ func TestExecOptions_Run_JSONOutput(t *testing.T) {
 		CommandArgs: []string{"kubectl", "get", "pods"},
 		ContextLoader: func() ([]kubeconfig.Context, error) {
 			return []kubeconfig.Context{
-				{Name: "test-cluster-1", WithPath: kubeconfig.WithPath{FilePath: "/tmp/config"}},
+				{Name: "test-cluster-1", FilePath: "/tmp/config"},
 			}, nil
 		},
 		StateManager: func() (*state.Manager, error) {
@@ -756,7 +750,7 @@ func TestExecOptions_Run_NoMatchingContexts(t *testing.T) {
 		CommandArgs: []string{"kubectl", "get", "pods"},
 		ContextLoader: func() ([]kubeconfig.Context, error) {
 			return []kubeconfig.Context{
-				{Name: "test-cluster", WithPath: kubeconfig.WithPath{FilePath: "/tmp/config"}},
+				{Name: "test-cluster", FilePath: "/tmp/config"},
 			}, nil
 		},
 	}
@@ -802,7 +796,7 @@ func TestExecOptions_Run_InteractiveNoSelection(t *testing.T) {
 		CommandArgs: []string{"kubectl", "get", "pods"},
 		ContextLoader: func() ([]kubeconfig.Context, error) {
 			return []kubeconfig.Context{
-				{Name: "test-cluster", WithPath: kubeconfig.WithPath{FilePath: "/tmp/config"}},
+				{Name: "test-cluster", FilePath: "/tmp/config"},
 			}, nil
 		},
 		Selector: func(items []string) ([]string, error) {
