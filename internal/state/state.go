@@ -130,12 +130,46 @@ func (m *Manager) Save() error {
 	})
 }
 
-// saveState saves the current state without acquiring locks (internal use only)
+// saveState saves the current state without acquiring locks (internal use only).
 func (m *Manager) saveState() error {
 	data, err := json.MarshalIndent(m.state, "", "  ")
 	if err != nil {
 		return fmt.Errorf("failed to marshal state: %w", err)
 	}
 
-	return os.WriteFile(m.filename, data, 0o600)
+	// Same directory as the state file, so the rename stays on one filesystem.
+	tmp, err := os.CreateTemp(filepath.Dir(m.filename), filepath.Base(m.filename)+".tmp-*")
+	if err != nil {
+		return fmt.Errorf("failed to create temporary state file: %w", err)
+	}
+
+	tmpName := tmp.Name()
+	defer func() {
+		if tmpName != "" {
+			_ = os.Remove(tmpName)
+		}
+	}()
+
+	if _, err := tmp.Write(data); err != nil {
+		_ = tmp.Close()
+		return fmt.Errorf("failed to write temporary state file: %w", err)
+	}
+
+	// Flush before the rename, so a crash cannot leave state.json pointing at an
+	// inode whose contents were never persisted.
+	if err := tmp.Sync(); err != nil {
+		_ = tmp.Close()
+		return fmt.Errorf("failed to sync temporary state file: %w", err)
+	}
+
+	if err := tmp.Close(); err != nil {
+		return fmt.Errorf("failed to close temporary state file: %w", err)
+	}
+
+	if err := os.Rename(tmpName, m.filename); err != nil {
+		return fmt.Errorf("failed to replace state file: %w", err)
+	}
+	tmpName = "" // renamed into place, nothing left to clean up
+
+	return nil
 }
