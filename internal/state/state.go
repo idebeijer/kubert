@@ -23,6 +23,9 @@ type State struct {
 	InPlaceSwitchWarnCount int                    `json:"in_place_switch_warn_count,omitempty"`
 }
 
+// Manager holds the state file's contents in memory. Mutations reload under the
+// file lock so they never overwrite another process's changes; reads are served
+// from the snapshot taken at the last mutation, or at NewManager.
 type Manager struct {
 	filename string
 	state    State
@@ -55,22 +58,15 @@ func NewManager() (*Manager, error) {
 		}
 	}()
 
-	// Check if the state file exists
-	if _, err := os.Stat(fullPath); os.IsNotExist(err) {
-		// Create the state file with an initial empty state
+	if _, err := os.Stat(fullPath); err != nil {
+		if !os.IsNotExist(err) {
+			return nil, fmt.Errorf("failed to stat state file: %w", err)
+		}
 		if err := manager.saveState(); err != nil {
 			return nil, err
 		}
-	} else {
-		// Load state directly without re-acquiring lock
-		data, err := os.ReadFile(manager.filename)
-		if err != nil {
-			return nil, fmt.Errorf("failed to read state file: %w", err)
-		}
-
-		if err := json.Unmarshal(data, &manager.state); err != nil {
-			return nil, fmt.Errorf("failed to unmarshal state: %w", err)
-		}
+	} else if err := manager.reload(); err != nil {
+		return nil, err
 	}
 
 	return manager, nil
@@ -90,7 +86,37 @@ func (m *Manager) withLock(fn func() error) error {
 		}
 	}()
 
+	// saveState writes the whole struct back, so a stale snapshot would discard
+	// another process's changes. Refresh to keep read-modify-write under the lock.
+	if err := m.reload(); err != nil {
+		return err
+	}
+
 	return fn()
+}
+
+// reload replaces the in-memory state with the state file's contents; callers hold
+// both the mutex and the file lock. Replacing matters rather than unmarshalling
+// over m.state: json.Unmarshal merges into an existing map, so a context another
+// process removed would come back. A deleted file resets for the same reason.
+func (m *Manager) reload() error {
+	var state State
+
+	data, err := os.ReadFile(m.filename)
+	if err != nil && !os.IsNotExist(err) {
+		return fmt.Errorf("failed to read state file: %w", err)
+	}
+	if err == nil {
+		if err := json.Unmarshal(data, &state); err != nil {
+			return fmt.Errorf("failed to unmarshal state: %w", err)
+		}
+	}
+	if state.Contexts == nil {
+		state.Contexts = make(map[string]ContextInfo)
+	}
+
+	m.state = state
+	return nil
 }
 
 // lock holds both the mutex and the file lock until unlock. Unexported because
@@ -113,24 +139,8 @@ func (m *Manager) unlock() error {
 	return nil
 }
 
-func (m *Manager) Load() error {
-	return m.withLock(func() error {
-		data, err := os.ReadFile(m.filename)
-		if err != nil {
-			return fmt.Errorf("failed to read state file: %w", err)
-		}
-
-		return json.Unmarshal(data, &m.state)
-	})
-}
-
-func (m *Manager) Save() error {
-	return m.withLock(func() error {
-		return m.saveState()
-	})
-}
-
-// saveState saves the current state without acquiring locks (internal use only).
+// saveState writes the in-memory state to the state file; callers hold both the
+// mutex and the file lock.
 func (m *Manager) saveState() error {
 	data, err := json.MarshalIndent(m.state, "", "  ")
 	if err != nil {
@@ -155,8 +165,7 @@ func (m *Manager) saveState() error {
 		return fmt.Errorf("failed to write temporary state file: %w", err)
 	}
 
-	// Flush before the rename, so a crash cannot leave state.json pointing at an
-	// inode whose contents were never persisted.
+	// Sync first: state.json must not end up pointing at unpersisted contents.
 	if err := tmp.Sync(); err != nil {
 		_ = tmp.Close()
 		return fmt.Errorf("failed to sync temporary state file: %w", err)
@@ -169,7 +178,7 @@ func (m *Manager) saveState() error {
 	if err := os.Rename(tmpName, m.filename); err != nil {
 		return fmt.Errorf("failed to replace state file: %w", err)
 	}
-	tmpName = "" // renamed into place, nothing left to clean up
+	tmpName = "" // disarms the deferred remove
 
 	return nil
 }
