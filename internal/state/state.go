@@ -46,11 +46,11 @@ func NewManager() (*Manager, error) {
 	}
 
 	// Acquire lock before checking/creating state file to avoid race conditions
-	if err := manager.Lock(); err != nil {
+	if err := manager.lock(); err != nil {
 		return nil, fmt.Errorf("failed to acquire lock during initialization: %w", err)
 	}
 	defer func() {
-		if unlockErr := manager.Unlock(); unlockErr != nil {
+		if unlockErr := manager.unlock(); unlockErr != nil {
 			slog.Warn("failed to release lock during initialization", "error", unlockErr)
 		}
 	}()
@@ -81,14 +81,11 @@ func FilePath() (string, error) {
 }
 
 func (m *Manager) withLock(fn func() error) error {
-	m.mutex.Lock()
-	defer m.mutex.Unlock()
-
-	if err := m.fileLock.Lock(); err != nil {
-		return fmt.Errorf("failed to acquire file lock: %w", err)
+	if err := m.lock(); err != nil {
+		return err
 	}
 	defer func() {
-		if unlockErr := m.fileLock.Unlock(); unlockErr != nil {
+		if unlockErr := m.unlock(); unlockErr != nil {
 			slog.Warn("failed to release file lock", "error", unlockErr)
 		}
 	}()
@@ -96,7 +93,10 @@ func (m *Manager) withLock(fn func() error) error {
 	return fn()
 }
 
-func (m *Manager) Lock() error {
+// lock holds both the mutex and the file lock until unlock. Unexported because
+// sync.Mutex is not reentrant: a caller holding it deadlocks on the next Manager
+// method it touches. Use withLock, which cannot be left holding the mutex.
+func (m *Manager) lock() error {
 	m.mutex.Lock()
 	if err := m.fileLock.Lock(); err != nil {
 		m.mutex.Unlock()
@@ -105,7 +105,7 @@ func (m *Manager) Lock() error {
 	return nil
 }
 
-func (m *Manager) Unlock() error {
+func (m *Manager) unlock() error {
 	defer m.mutex.Unlock()
 	if err := m.fileLock.Unlock(); err != nil {
 		return fmt.Errorf("failed to release file lock: %w", err)
