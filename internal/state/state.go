@@ -2,6 +2,7 @@ package state
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log/slog"
 	"os"
@@ -17,6 +18,8 @@ const (
 	stateFile = "state.json"
 )
 
+var errLockBroken = errors.New("file lock is in an unknown state after a failed release; rerun the command")
+
 type State struct {
 	Contexts               map[string]ContextInfo `json:"contexts"`
 	LastContext            string                 `json:"last_context,omitempty"`
@@ -27,10 +30,11 @@ type State struct {
 // file lock so they never overwrite another process's changes; reads are served
 // from the snapshot taken at the last mutation, or at NewManager.
 type Manager struct {
-	filename string
-	state    State
-	fileLock *flock.Flock
-	mutex    sync.Mutex
+	filename   string
+	state      State
+	fileLock   *flock.Flock
+	mutex      sync.Mutex
+	lockBroken bool
 }
 
 func NewManager() (*Manager, error) {
@@ -124,6 +128,10 @@ func (m *Manager) reload() error {
 // method it touches. Use withLock, which cannot be left holding the mutex.
 func (m *Manager) lock() error {
 	m.mutex.Lock()
+	if m.lockBroken {
+		m.mutex.Unlock()
+		return errLockBroken
+	}
 	if err := m.fileLock.Lock(); err != nil {
 		m.mutex.Unlock()
 		return fmt.Errorf("failed to acquire file lock: %w", err)
@@ -134,6 +142,11 @@ func (m *Manager) lock() error {
 func (m *Manager) unlock() error {
 	defer m.mutex.Unlock()
 	if err := m.fileLock.Unlock(); err != nil {
+		// flock leaves its "locked" flag set when the unlock syscall fails, and its
+		// Lock returns nil without a syscall while that flag is set. Every later
+		// lock would then hold nothing, so refuse the Manager instead of silently
+		// dropping cross-process exclusion.
+		m.lockBroken = true
 		return fmt.Errorf("failed to release file lock: %w", err)
 	}
 	return nil

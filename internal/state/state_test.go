@@ -678,3 +678,21 @@ func TestManager_SaveStateLeavesNoTempFilesAndKeepsMode(t *testing.T) {
 		t.Errorf("temporary files left behind: %v", leftovers)
 	}
 }
+
+// A failed release leaves gofrs/flock believing it still holds the lock, so the
+// Manager refuses further work rather than running with no exclusion at all. The
+// flag is set directly here; the syscall failure itself isn't reproducible.
+func TestManager_RefusesWorkAfterFailedUnlock(t *testing.T) {
+	manager, tempDir := setupTestManager(t)
+	defer cleanupTestManager(tempDir)
+
+	manager.lockBroken = true
+
+	// Twice: the second call also proves lock() released the mutex on refusal.
+	for range 2 {
+		err := manager.SetLastNamespaceWithContextCreation(testContextName, testNamespaceName)
+		if !errors.Is(err, errLockBroken) {
+			t.Fatalf("expected errLockBroken, got %v", err)
+		}
+	}
+}
