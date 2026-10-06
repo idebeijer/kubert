@@ -15,19 +15,15 @@ func ExpandPath(path string) (string, error) {
 	// Expand environment variables first
 	path = os.ExpandEnv(path)
 
-	if path == "~" {
+	if path == "~" || strings.HasPrefix(path, "~/") {
 		home, err := os.UserHomeDir()
 		if err != nil {
 			return "", fmt.Errorf("failed to get home directory for path %s: %w", path, err)
 		}
-		return home, nil
-	}
-	if strings.HasPrefix(path, "~/") {
-		home, err := os.UserHomeDir()
-		if err != nil {
-			return "", fmt.Errorf("failed to get home directory for path %s: %w", path, err)
+		if path == "~" {
+			return home, nil
 		}
-		return filepath.Join(home, path[2:]), nil
+		return filepath.Join(home, strings.TrimPrefix(path, "~/")), nil
 	}
 	return path, nil
 }

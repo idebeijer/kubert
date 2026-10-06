@@ -6,47 +6,36 @@ import (
 	"testing"
 )
 
-func TestExpandPathHome(t *testing.T) {
+func TestExpandPath(t *testing.T) {
 	home, err := os.UserHomeDir()
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	got, err := ExpandPath("~")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if got != home {
-		t.Fatalf("ExpandPath(~) = %q, want %q", got, home)
+	t.Setenv("KUBERT_EXPAND_TEST", "expanded-value")
+
+	tests := []struct {
+		name string
+		in   string
+		want string
+	}{
+		{name: "lone tilde", in: "~", want: home},
+		{name: "tilde slash", in: "~/.kube/config", want: filepath.Join(home, ".kube", "config")},
+		{name: "other user tilde", in: "~otheruser/.kube/config", want: "~otheruser/.kube/config"},
+		{name: "double tilde", in: "~~", want: "~~"},
+		{name: "absolute", in: "/etc/kubernetes/admin.conf", want: "/etc/kubernetes/admin.conf"},
+		{name: "env var", in: "$KUBERT_EXPAND_TEST/config", want: "expanded-value/config"},
 	}
 
-	got, err = ExpandPath("~/.kube/config")
-	if err != nil {
-		t.Fatal(err)
-	}
-	want := filepath.Join(home, ".kube", "config")
-	if got != want {
-		t.Fatalf("ExpandPath(~/.kube/config) = %q, want %q", got, want)
-	}
-}
-
-func TestExpandPathLeavesOtherUserTilde(t *testing.T) {
-	in := "~otheruser/.kube/config"
-	got, err := ExpandPath(in)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if got != in {
-		t.Fatalf("ExpandPath(%q) = %q, want unchanged", in, got)
-	}
-}
-
-func TestExpandPathPlain(t *testing.T) {
-	got, err := ExpandPath("/etc/kubernetes/admin.conf")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if got != "/etc/kubernetes/admin.conf" {
-		t.Fatalf("got %q", got)
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			got, err := ExpandPath(tc.in)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if got != tc.want {
+				t.Fatalf("ExpandPath(%q) = %q, want %q", tc.in, got, tc.want)
+			}
+		})
 	}
 }
