@@ -103,7 +103,7 @@ func (m *Manager) IsContextProtected(context string) (bool, error) {
 			return false, nil
 		}
 		// Lift has expired, clean up (best effort)
-		_ = m.ClearProtectedUntil(context)
+		_ = m.clearExpiredProtectedUntil(context)
 	}
 
 	if info.Protected == nil {
@@ -120,6 +120,23 @@ func (m *Manager) LiftContextProtection(context string, until time.Time) error {
 			return &ContextNotFoundError{Context: context}
 		}
 		info.ProtectedUntil = &until
+		m.state.Contexts[context] = info
+		return m.saveState()
+	})
+}
+
+// clearExpiredProtectedUntil clears ProtectedUntil only if it is still expired
+// after reloading, so a lift another process set since our snapshot survives.
+func (m *Manager) clearExpiredProtectedUntil(context string) error {
+	return m.withLock(func() error {
+		info, exists := m.state.Contexts[context]
+		if !exists {
+			return &ContextNotFoundError{Context: context}
+		}
+		if info.ProtectedUntil == nil || time.Now().Before(*info.ProtectedUntil) {
+			return nil
+		}
+		info.ProtectedUntil = nil
 		m.state.Contexts[context] = info
 		return m.saveState()
 	})

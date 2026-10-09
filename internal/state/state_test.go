@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"path/filepath"
 	"slices"
 	"sync"
 	"testing"
@@ -522,5 +523,228 @@ func TestManager_ClearProtectedUntil_NonExistingContext(t *testing.T) {
 
 	if _, ok := errors.AsType[*ContextNotFoundError](err); !ok {
 		t.Errorf("Expected ContextNotFoundError, got %T", err)
+	}
+}
+
+// Two Managers over one state file stand in for two kubert processes. Each
+// mutation writes the whole struct back, so a stale snapshot loses the other's
+// change.
+func TestManager_ConcurrentProcessesDoNotLoseUpdates(t *testing.T) {
+	_, tempDir := setupTestManager(t)
+	defer cleanupTestManager(tempDir)
+
+	seed, err := NewManager()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, context := range []string{"ctx-a", "ctx-b"} {
+		if err := seed.SetLastNamespaceWithContextCreation(context, "original"); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	// Both processes start up and read the same snapshot.
+	first, err := NewManager()
+	if err != nil {
+		t.Fatal(err)
+	}
+	second, err := NewManager()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if err := first.SetLastNamespace("ctx-a", "from-first"); err != nil {
+		t.Fatal(err)
+	}
+	if err := second.SetLastNamespace("ctx-b", "from-second"); err != nil {
+		t.Fatal(err)
+	}
+
+	final, err := NewManager()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for context, want := range map[string]string{"ctx-a": "from-first", "ctx-b": "from-second"} {
+		info, exists := final.ContextInfo(context)
+		if !exists {
+			t.Fatalf("context %s missing from state file", context)
+		}
+		if info.LastNamespace != want {
+			t.Errorf("context %s: expected namespace %q, got %q", context, want, info.LastNamespace)
+		}
+	}
+}
+
+// A removed context must not come back when another process writes its stale
+// snapshot.
+func TestManager_ConcurrentProcessesDoNotResurrectRemovedContext(t *testing.T) {
+	_, tempDir := setupTestManager(t)
+	defer cleanupTestManager(tempDir)
+
+	seed, err := NewManager()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, context := range []string{"doomed", "keeper"} {
+		if err := seed.SetLastNamespaceWithContextCreation(context, "ns"); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	remover, err := NewManager()
+	if err != nil {
+		t.Fatal(err)
+	}
+	writer, err := NewManager()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if err := remover.RemoveContext("doomed"); err != nil {
+		t.Fatal(err)
+	}
+	// writer still has "doomed" in its snapshot from startup.
+	if err := writer.SetLastNamespace("keeper", "updated"); err != nil {
+		t.Fatal(err)
+	}
+
+	final, err := NewManager()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, exists := final.ContextInfo("doomed"); exists {
+		t.Error("removed context was resurrected by a stale writer")
+	}
+	if info, _ := final.ContextInfo("keeper"); info.LastNamespace != "updated" {
+		t.Errorf("expected keeper namespace %q, got %q", "updated", info.LastNamespace)
+	}
+}
+
+// Clearing an expired lift seen in a stale snapshot must not wipe a fresh lift
+// another process set since.
+func TestManager_ExpiredLiftCleanupKeepsFreshLift(t *testing.T) {
+	_, tempDir := setupTestManager(t)
+	defer cleanupTestManager(tempDir)
+
+	seed, err := NewManager()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := seed.SetLastNamespaceWithContextCreation(testContextName, testNamespaceName); err != nil {
+		t.Fatal(err)
+	}
+	if err := seed.SetContextProtection(testContextName, true); err != nil {
+		t.Fatal(err)
+	}
+	if err := seed.LiftContextProtection(testContextName, time.Now().Add(-1*time.Hour)); err != nil {
+		t.Fatal(err)
+	}
+
+	// checker starts up and sees the expired lift.
+	checker, err := NewManager()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	lifter, err := NewManager()
+	if err != nil {
+		t.Fatal(err)
+	}
+	freshLift := time.Now().Add(1 * time.Hour)
+	if err := lifter.LiftContextProtection(testContextName, freshLift); err != nil {
+		t.Fatal(err)
+	}
+
+	if _, err := checker.IsContextProtected(testContextName); err != nil {
+		t.Fatal(err)
+	}
+
+	final, err := NewManager()
+	if err != nil {
+		t.Fatal(err)
+	}
+	info, _ := final.ContextInfo(testContextName)
+	if info.ProtectedUntil == nil {
+		t.Fatal("fresh lift was wiped by a stale expired-lift cleanup")
+	}
+	if !info.ProtectedUntil.Equal(freshLift) {
+		t.Errorf("ProtectedUntil = %v, want %v", info.ProtectedUntil, freshLift)
+	}
+}
+
+// Deleting state.json must reset the state rather than let the next mutator
+// rewrite the snapshot from before the delete.
+func TestManager_DeletedStateFileResetsState(t *testing.T) {
+	manager, tempDir := setupTestManager(t)
+	defer cleanupTestManager(tempDir)
+
+	if err := manager.SetLastNamespaceWithContextCreation("doomed", "ns"); err != nil {
+		t.Fatal(err)
+	}
+
+	stateFilePath, err := FilePath()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Remove(stateFilePath); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := manager.SetLastNamespaceWithContextCreation("fresh", "ns"); err != nil {
+		t.Fatal(err)
+	}
+
+	if contexts := manager.ListContexts(); !slices.Equal(contexts, []string{"fresh"}) {
+		t.Errorf("expected only the post-delete context, got %v", contexts)
+	}
+}
+
+// saveState writes through a temp file, so the 0600 mode os.WriteFile once set
+// explicitly is now implicit in os.CreateTemp. Pins the mode; the leftover check
+// only covers the happy path, since the error paths never run here.
+func TestManager_SaveStateLeavesNoTempFilesAndKeepsMode(t *testing.T) {
+	manager, tempDir := setupTestManager(t)
+	defer cleanupTestManager(tempDir)
+
+	if err := manager.SetLastNamespaceWithContextCreation(testContextName, testNamespaceName); err != nil {
+		t.Fatal(err)
+	}
+
+	stateFilePath, err := FilePath()
+	if err != nil {
+		t.Fatal(err)
+	}
+	info, err := os.Stat(stateFilePath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if mode := info.Mode().Perm(); mode != 0o600 {
+		t.Errorf("expected state file mode 0600, got %#o", mode)
+	}
+
+	leftovers, err := filepath.Glob(filepath.Join(filepath.Dir(stateFilePath), "*.tmp-*"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(leftovers) > 0 {
+		t.Errorf("temporary files left behind: %v", leftovers)
+	}
+}
+
+// A failed release leaves gofrs/flock believing it still holds the lock, so the
+// Manager refuses further work rather than running with no exclusion at all. The
+// flag is set directly here; the syscall failure itself isn't reproducible.
+func TestManager_RefusesWorkAfterFailedUnlock(t *testing.T) {
+	manager, tempDir := setupTestManager(t)
+	defer cleanupTestManager(tempDir)
+
+	manager.lockBroken = true
+
+	// Twice: the second call also proves lock() released the mutex on refusal.
+	for range 2 {
+		err := manager.SetLastNamespaceWithContextCreation(testContextName, testNamespaceName)
+		if !errors.Is(err, errLockBroken) {
+			t.Fatalf("expected errLockBroken, got %v", err)
+		}
 	}
 }
