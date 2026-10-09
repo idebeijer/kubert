@@ -620,6 +620,58 @@ func TestManager_ConcurrentProcessesDoNotResurrectRemovedContext(t *testing.T) {
 	}
 }
 
+// Clearing an expired lift seen in a stale snapshot must not wipe a fresh lift
+// another process set since.
+func TestManager_ExpiredLiftCleanupKeepsFreshLift(t *testing.T) {
+	_, tempDir := setupTestManager(t)
+	defer cleanupTestManager(tempDir)
+
+	seed, err := NewManager()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := seed.SetLastNamespaceWithContextCreation(testContextName, testNamespaceName); err != nil {
+		t.Fatal(err)
+	}
+	if err := seed.SetContextProtection(testContextName, true); err != nil {
+		t.Fatal(err)
+	}
+	if err := seed.LiftContextProtection(testContextName, time.Now().Add(-1*time.Hour)); err != nil {
+		t.Fatal(err)
+	}
+
+	// checker starts up and sees the expired lift.
+	checker, err := NewManager()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	lifter, err := NewManager()
+	if err != nil {
+		t.Fatal(err)
+	}
+	freshLift := time.Now().Add(1 * time.Hour)
+	if err := lifter.LiftContextProtection(testContextName, freshLift); err != nil {
+		t.Fatal(err)
+	}
+
+	if _, err := checker.IsContextProtected(testContextName); err != nil {
+		t.Fatal(err)
+	}
+
+	final, err := NewManager()
+	if err != nil {
+		t.Fatal(err)
+	}
+	info, _ := final.ContextInfo(testContextName)
+	if info.ProtectedUntil == nil {
+		t.Fatal("fresh lift was wiped by a stale expired-lift cleanup")
+	}
+	if !info.ProtectedUntil.Equal(freshLift) {
+		t.Errorf("ProtectedUntil = %v, want %v", info.ProtectedUntil, freshLift)
+	}
+}
+
 // Deleting state.json must reset the state rather than let the next mutator
 // rewrite the snapshot from before the delete.
 func TestManager_DeletedStateFileResetsState(t *testing.T) {
