@@ -342,21 +342,20 @@ func createTempKubeconfigFile(kubeconfigPath, selectedContextName, namespace str
 	if err != nil {
 		return nil, nil, err
 	}
-	if err = tempKubeconfig.Chmod(0o600); err != nil {
-		_ = tempKubeconfig.Close()
-		// #nosec G703 -- temporal file created by the program is safe
-		_ = os.Remove(tempKubeconfig.Name())
-		return nil, nil, err
-	}
-
-	if err := clientcmd.WriteToFile(*newConfig, tempKubeconfig.Name()); err != nil {
-		return nil, nil, fmt.Errorf("failed to write kubeconfig: %w", err)
-	}
-
 	cleanup := func() {
 		_ = tempKubeconfig.Close()
 		// #nosec G703 -- temporal file created by the program is safe
 		_ = os.Remove(tempKubeconfig.Name())
+	}
+
+	if err := tempKubeconfig.Chmod(0o600); err != nil {
+		cleanup()
+		return nil, nil, err
+	}
+
+	if err := clientcmd.WriteToFile(*newConfig, tempKubeconfig.Name()); err != nil {
+		cleanup()
+		return nil, nil, fmt.Errorf("failed to write kubeconfig: %w", err)
 	}
 
 	return tempKubeconfig, cleanup, nil
